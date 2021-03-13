@@ -12,6 +12,7 @@ Only supports publishing for now.
 
 ```toml
 [dependencies]
+nats =  "0.9.7"
 stan = "0.0.3"
 ```
 
