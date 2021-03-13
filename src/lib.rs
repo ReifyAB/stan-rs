@@ -41,6 +41,7 @@ fn process_ack(msg: nats::Message) -> io::Result<()> {
     Ok(())
 }
 
+
 pub struct Client {
     nats_connection: nats::Connection,
     cluster_id: String,
@@ -57,50 +58,6 @@ pub struct Client {
     heartbeat_subject: String,
     heartbeat_sub: nats::subscription::Handler,
 }
-
-pub fn connect(nats_connection: nats::Connection, cluster_id: &str, client_id: &str) -> io::Result<Client> {
-    let discover_subject = DEFAULT_DISCOVER_SUBJECT.to_owned() + "." + cluster_id;
-    let heartbeat_subject = uuid();
-    let heartbeat_sub = nats_connection.subscribe(&heartbeat_subject)?.with_handler(process_heartbeat);
-    let conn_id = uuid().as_bytes().to_owned();
-
-    let conn_req = proto::ConnectRequest {
-        client_id: client_id.to_string(),
-        heartbeat_inbox: heartbeat_subject.to_string(),
-        protocol: PROTOCOL,
-        conn_id: conn_id.to_owned(),
-        ping_interval: DEFAULT_PING_INTERVAL,
-        ping_max_out: DEFAULT_PING_MAX_OUT,
-    };
-
-    let mut buf = Vec::new();
-    conn_req.encode(&mut buf).unwrap();
-    let resp = nats_connection.request(&discover_subject, buf)?;
-
-    let conn_resp = proto::ConnectResponse::decode(Bytes::from(resp.data))?;
-    if conn_resp.error != "" {
-        return Err(io::Error::new(io::ErrorKind::Other, conn_resp.error));
-    }
-
-    let client = Client{
-        nats_connection,
-        cluster_id: cluster_id.to_owned(),
-        client_id: client_id.to_owned(),
-        conn_id,
-        discover_subject,
-        heartbeat_subject,
-        heartbeat_sub,
-
-        pub_prefix: conn_resp.pub_prefix,
-        sub_req_subject: conn_resp.sub_requests,
-        unsub_req_subject: conn_resp.unsub_requests,
-        close_req_subject: conn_resp.close_requests,
-        sub_close_req_subject: conn_resp.sub_close_requests,
-    };
-
-    Ok(client)
-}
-
 
 impl Client {
     pub fn publish(&self, subject: &str, msg: impl AsRef<[u8]>) -> io::Result<()> {
@@ -125,4 +82,64 @@ impl Client {
         let resp = ack_sub.next_timeout(time::Duration::from_secs(DEFAULT_ACK_WAIT.into()))?;
         process_ack(resp)
     }
+
+    fn nats_request<Req: Message, Res: Message + Default>(&self, req: Req) -> io::Result<Res>{
+        let mut buf = Vec::new();
+        req.encode(&mut buf).unwrap();
+        let resp = self.nats_connection.request(&self.discover_subject, buf)?;
+        Ok(Res::decode(Bytes::from(resp.data))?)
+    }
+}
+
+impl Drop for Client {
+    fn drop(&mut self) {
+        let res: io::Result<proto::CloseResponse> = self.nats_request(proto::CloseRequest{
+            client_id: self.client_id.to_owned(),
+        });
+    }
+}
+
+pub fn connect(nats_connection: nats::Connection, cluster_id: &str, client_id: &str) -> io::Result<Client> {
+    let discover_subject = DEFAULT_DISCOVER_SUBJECT.to_owned() + "." + cluster_id;
+    let heartbeat_subject = uuid();
+    let heartbeat_sub = nats_connection.subscribe(&heartbeat_subject)?.with_handler(process_heartbeat);
+    let conn_id = uuid().as_bytes().to_owned();
+
+    let mut client = Client{
+        nats_connection,
+        cluster_id: cluster_id.to_owned(),
+        client_id: client_id.to_owned(),
+        conn_id,
+        discover_subject,
+        heartbeat_subject,
+        heartbeat_sub,
+
+        pub_prefix: "".to_string(),
+        sub_req_subject: "".to_string(),
+        unsub_req_subject: "".to_string(),
+        close_req_subject: "".to_string(),
+        sub_close_req_subject: "".to_string(),
+    };
+
+    let conn_req = proto::ConnectRequest {
+        client_id: client_id.to_string(),
+        heartbeat_inbox: client.heartbeat_subject.to_owned(),
+        protocol: PROTOCOL,
+        conn_id: client.conn_id.to_owned(),
+        ping_interval: DEFAULT_PING_INTERVAL,
+        ping_max_out: DEFAULT_PING_MAX_OUT,
+    };
+
+    let conn_resp: proto::ConnectResponse = client.nats_request(conn_req)?;
+    if conn_resp.error != "" {
+        return Err(io::Error::new(io::ErrorKind::Other, conn_resp.error));
+    }
+
+    client.pub_prefix = conn_resp.pub_prefix;
+    client.sub_req_subject = conn_resp.sub_requests;
+    client.unsub_req_subject = conn_resp.unsub_requests;
+    client.close_req_subject = conn_resp.close_requests;
+    client.sub_close_req_subject = conn_resp.sub_close_requests;
+
+    Ok(client)
 }
