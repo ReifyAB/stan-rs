@@ -1,7 +1,7 @@
-use std::{io, time};
 use bytes::Bytes;
-use uuid::Uuid;
 use prost::Message;
+use std::{fmt, io, time};
+use uuid::Uuid;
 
 mod proto;
 
@@ -35,12 +35,11 @@ fn process_heartbeat(msg: nats::Message) -> io::Result<()> {
 fn process_ack(msg: nats::Message) -> io::Result<()> {
     let ack = proto::PubAck::decode(Bytes::from(msg.data))?;
     if ack.error != "" {
-        return Err(io::Error::new(io::ErrorKind::Other, ack.error))
+        return Err(io::Error::new(io::ErrorKind::Other, ack.error));
     }
     println!("ack: {}", &ack.guid);
     Ok(())
 }
-
 
 pub struct Client {
     nats_connection: nats::Connection,
@@ -63,7 +62,7 @@ impl Client {
     pub fn publish(&self, subject: &str, msg: impl AsRef<[u8]>) -> io::Result<()> {
         let stan_subject = self.pub_prefix.to_owned() + "." + subject;
 
-        let msg = proto::PubMsg{
+        let msg = proto::PubMsg {
             client_id: self.client_id.to_owned(),
             guid: uuid(),
             subject: subject.to_owned(),
@@ -78,12 +77,13 @@ impl Client {
 
         let ack_inbox = new_ack_inbox();
         let ack_sub = self.nats_connection.subscribe(&ack_inbox)?;
-        self.nats_connection.publish_request(&stan_subject, &ack_inbox, &buf)?;
+        self.nats_connection
+            .publish_request(&stan_subject, &ack_inbox, &buf)?;
         let resp = ack_sub.next_timeout(time::Duration::from_secs(DEFAULT_ACK_WAIT.into()))?;
         process_ack(resp)
     }
 
-    fn nats_request<Req: Message, Res: Message + Default>(&self, req: Req) -> io::Result<Res>{
+    fn nats_request<Req: Message, Res: Message + Default>(&self, req: Req) -> io::Result<Res> {
         let mut buf = Vec::new();
         req.encode(&mut buf).unwrap();
         let resp = self.nats_connection.request(&self.discover_subject, buf)?;
@@ -91,21 +91,45 @@ impl Client {
     }
 }
 
-impl Drop for Client {
-    fn drop(&mut self) {
-        let res: io::Result<proto::CloseResponse> = self.nats_request(proto::CloseRequest{
-            client_id: self.client_id.to_owned(),
-        });
+impl fmt::Debug for Client {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Client")
+            .field("cluster_id", &self.cluster_id)
+            .field("client_id", &self.client_id)
+            .field("conn_id", &self.conn_id)
+            .field("pub_prefix", &self.pub_prefix)
+            .field("sub_req_subject", &self.sub_req_subject)
+            .field("unsub_req_subject", &self.unsub_req_subject)
+            .field("close_req_subject", &self.close_req_subject)
+            .field("sub_close_req_subject", &self.sub_close_req_subject)
+            .field("discover_subject", &self.discover_subject)
+            .field("heartbeat_subject", &self.heartbeat_subject)
+            .finish()
     }
 }
 
-pub fn connect(nats_connection: nats::Connection, cluster_id: &str, client_id: &str) -> io::Result<Client> {
+impl Drop for Client {
+    fn drop(&mut self) {
+        let _res: io::Result<proto::CloseResponse> = self.nats_request(proto::CloseRequest {
+            client_id: self.client_id.to_owned(),
+        });
+        // TODO: figure out what to do if this fails
+    }
+}
+
+pub fn connect(
+    nats_connection: nats::Connection,
+    cluster_id: &str,
+    client_id: &str,
+) -> io::Result<Client> {
     let discover_subject = DEFAULT_DISCOVER_SUBJECT.to_owned() + "." + cluster_id;
     let heartbeat_subject = uuid();
-    let heartbeat_sub = nats_connection.subscribe(&heartbeat_subject)?.with_handler(process_heartbeat);
+    let heartbeat_sub = nats_connection
+        .subscribe(&heartbeat_subject)?
+        .with_handler(process_heartbeat);
     let conn_id = uuid().as_bytes().to_owned();
 
-    let mut client = Client{
+    let mut client = Client {
         nats_connection,
         cluster_id: cluster_id.to_owned(),
         client_id: client_id.to_owned(),
