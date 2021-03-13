@@ -28,3 +28,11 @@ fn main() -> io::Result<()> {
     client.publish("foo", "hello from rust!")
 }
 ```
+
+## Development
+
+To start a local nats streaming server for testing:
+
+```
+docker run -p 4222:4222 -p 8222:8222 nats-streaming
+```
