@@ -24,9 +24,7 @@ fn new_ack_inbox() -> String {
 }
 
 fn process_heartbeat(msg: nats::Message) -> io::Result<()> {
-    println!("Received heartbeat {}", &msg);
     if let Some(reply) = msg.reply {
-        println!("respond to heartbeat");
         msg.client.publish(&reply, None, None, &[])?;
     }
     Ok(())
@@ -55,7 +53,7 @@ pub struct Client {
 
     discover_subject: String,
     heartbeat_subject: String,
-    heartbeat_sub: nats::subscription::Handler,
+    _heartbeat_sub: nats::subscription::Handler,
 }
 
 impl Client {
@@ -83,10 +81,14 @@ impl Client {
         process_ack(resp)
     }
 
-    fn nats_request<Req: Message, Res: Message + Default>(&self, req: Req) -> io::Result<Res> {
+    fn nats_request<Req: Message, Res: Message + Default>(
+        &self,
+        subject: &str,
+        req: Req,
+    ) -> io::Result<Res> {
         let mut buf = Vec::new();
         req.encode(&mut buf).unwrap();
-        let resp = self.nats_connection.request(&self.discover_subject, buf)?;
+        let resp = self.nats_connection.request(&subject, buf)?;
         Ok(Res::decode(Bytes::from(resp.data))?)
     }
 }
@@ -110,10 +112,14 @@ impl fmt::Debug for Client {
 
 impl Drop for Client {
     fn drop(&mut self) {
-        let _res: io::Result<proto::CloseResponse> = self.nats_request(proto::CloseRequest {
-            client_id: self.client_id.to_owned(),
-        });
-        // TODO: figure out what to do if this fails
+        // TODO: better cleanup?
+        // TODO: figure out what to do if we fail here?
+        let _res: io::Result<proto::CloseResponse> = self.nats_request(
+            &self.close_req_subject,
+            proto::CloseRequest {
+                client_id: self.client_id.to_owned(),
+            },
+        );
     }
 }
 
@@ -136,7 +142,7 @@ pub fn connect(
         conn_id,
         discover_subject,
         heartbeat_subject,
-        heartbeat_sub,
+        _heartbeat_sub: heartbeat_sub,
 
         pub_prefix: "".to_string(),
         sub_req_subject: "".to_string(),
@@ -154,7 +160,8 @@ pub fn connect(
         ping_max_out: DEFAULT_PING_MAX_OUT,
     };
 
-    let conn_resp: proto::ConnectResponse = client.nats_request(conn_req)?;
+    let conn_resp: proto::ConnectResponse =
+        client.nats_request(&client.discover_subject, conn_req)?;
     if conn_resp.error != "" {
         return Err(io::Error::new(io::ErrorKind::Other, conn_resp.error));
     }
