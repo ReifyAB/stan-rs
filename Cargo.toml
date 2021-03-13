@@ -1,0 +1,15 @@
+[package]
+name = "stan"
+version = "0.1.0"
+authors = ["Jell <jean-louis@jawaninja.com>"]
+edition = "2018"
+
+[dependencies]
+bytes = "1.0.1"
+prost = "0.7.0"
+nats = "0.9.7"
+uuid = { version = "0.8", features = ["v4"] }
+
+
+[build-dependencies]
+prost-build = { version = "0.7.0" }
