@@ -1,8 +1,9 @@
 use std::{io, thread, time};
 use bytes::Bytes;
 use uuid::Uuid;
-mod proto;
 use prost::Message;
+
+mod proto;
 
 const DEFAULT_ACKS_SUBJECT: &str = "_STAN.acks";
 const DEFAULT_DISCOVER_SUBJECT: &str = "_STAN.discover";
@@ -30,7 +31,6 @@ fn process_heartbeat(msg: nats::Message) -> io::Result<()> {
     }
     Ok(())
 }
-
 
 fn process_ack(msg: nats::Message) -> io::Result<()> {
     let ack = proto::PubAck::decode(Bytes::from(msg.data))?;
