@@ -1,8 +1,11 @@
 [package]
 name = "stan"
-version = "0.1.0"
-authors = ["Jell <jean-louis@jawaninja.com>"]
+version = "0.0.1"
+authors = ["Jell <jean-louis@reify.se>"]
 edition = "2018"
+license = "Apache-2.0"
+description = "NATS Streaming client based on official NATS rust client"
+repository = "https://github.com/Jell/stan-rs"
 
 [dependencies]
 bytes = "1.0.1"
