@@ -18,6 +18,10 @@ fn uuid() -> String {
     Uuid::new_v4().to_string()
 }
 
+fn new_ack_inbox() -> String {
+    DEFAULT_ACKS_SUBJECT.to_owned() + "." + &uuid()
+}
+
 fn process_heartbeat(msg: nats::Message) -> io::Result<()> {
     println!("Received heartbeat {}", &msg);
     if let Some(reply) = msg.reply {
@@ -26,6 +30,7 @@ fn process_heartbeat(msg: nats::Message) -> io::Result<()> {
     }
     Ok(())
 }
+
 
 fn process_ack(msg: nats::Message) -> io::Result<()> {
     let ack = proto::PubAck::decode(Bytes::from(msg.data))?;
@@ -49,8 +54,6 @@ struct Client {
     sub_close_req_subject: String,
 
     discover_subject: String,
-    ack_subject: String,
-    ack_sub: nats::subscription::Handler,
     heartbeat_subject: String,
     heartbeat_sub: nats::subscription::Handler,
 }
@@ -58,10 +61,8 @@ struct Client {
 impl Client {
     fn connect(nats_connection: nats::Connection, cluster_id: &str, client_id: &str) -> io::Result<Self> {
         let discover_subject = DEFAULT_DISCOVER_SUBJECT.to_owned() + "." + cluster_id;
-        let ack_subject = DEFAULT_ACKS_SUBJECT.to_owned() + "." + &uuid();
         let heartbeat_subject = uuid();
         let heartbeat_sub = nats_connection.subscribe(&heartbeat_subject)?.with_handler(process_heartbeat);
-        let ack_sub = nats_connection.subscribe(&ack_subject)?.with_handler(process_ack);
         let conn_id = uuid().as_bytes().to_owned();
 
         let conn_req = proto::ConnectRequest {
@@ -88,8 +89,6 @@ impl Client {
             client_id: client_id.to_owned(),
             conn_id,
             discover_subject,
-            ack_subject,
-            ack_sub,
             heartbeat_subject,
             heartbeat_sub,
 
@@ -119,9 +118,9 @@ impl Client {
         let mut buf: Vec<u8> = Vec::new();
         msg.encode(&mut buf)?;
 
-        let ack = self.nats_connection.new_inbox();
-        let ack_sub = self.nats_connection.subscribe(&ack)?;
-        self.nats_connection.publish_request(&stan_subject, &ack, &buf)?;
+        let ack_inbox = new_ack_inbox();
+        let ack_sub = self.nats_connection.subscribe(&ack_inbox)?;
+        self.nats_connection.publish_request(&stan_subject, &ack_inbox, &buf)?;
         let resp = ack_sub.next_timeout(time::Duration::from_secs(DEFAULT_ACK_WAIT.into()))?;
         process_ack(resp)
     }
