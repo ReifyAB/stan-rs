@@ -7,7 +7,7 @@ mod proto;
 
 const DEFAULT_ACKS_SUBJECT: &str = "_STAN.acks";
 const DEFAULT_DISCOVER_SUBJECT: &str = "_STAN.discover";
-const DEFAULT_ACK_WAIT: u32 = 5;
+const DEFAULT_ACK_WAIT: i32 = 5;
 const DEFAULT_MAX_INFLIGHT: i32 = 1024;
 const DEFAULT_CONNECT_TIMEOUT: i32 = 2;
 const DEFAULT_MAX_PUB_ACKS_INFLIGHT: i32 = 16384;
@@ -39,6 +39,8 @@ fn process_ack(msg: nats::Message) -> io::Result<()> {
     Ok(())
 }
 
+
+#[derive(Clone)]
 pub struct Client {
     nats_connection: nats::Connection,
     cluster_id: String,
@@ -53,7 +55,56 @@ pub struct Client {
 
     discover_subject: String,
     heartbeat_subject: String,
-    _heartbeat_sub: nats::subscription::Handler,
+}
+
+pub struct Subscription {
+    subscription: nats::Subscription,
+    nats_connection: nats::Connection,
+    ack_inbox: String,
+    client_id: String,
+    subject: String,
+    unsub_req_subject: String,
+}
+
+/*
+impl Drop for Subscription {
+    fn drop(&mut self) {
+        let req = proto::UnsubscribeRequest {
+            client_id: self.client_id.to_owned(),
+            subject: self.subject.to_owned(),
+            inbox: self.ack_inbox.to_owned(),
+            durable_name: "".to_string(),
+        };
+        let mut buf: Vec<u8> = Vec::new();
+        req.encode(&mut buf).unwrap_or_else(|e| println!("{:?}", e));
+        self.nats_connection
+            .publish(&self.unsub_req_subject, &buf)
+            .unwrap_or_else(|e| println!("{:?}", e));
+        println!("unsub!");
+    }
+}
+*/
+
+impl Subscription {
+    pub fn with_handler<F>(self, handler: F) -> nats::subscription::Handler
+    where
+        F: Fn(proto::MsgProto) -> io::Result<()> + Send + 'static,
+    {
+        let ack_inbox = self.ack_inbox.to_owned();
+        self.subscription.with_handler(move |msg| {
+            let m = proto::MsgProto::decode(Bytes::from(msg.data))?;
+
+            handler(m.to_owned())?;
+
+            let ack = proto::Ack {
+                subject: m.subject.to_owned(),
+                sequence: m.sequence,
+            };
+            let mut buf: Vec<u8> = Vec::new();
+            ack.encode(&mut buf)?;
+            msg.client.publish(&ack_inbox, None, None, &buf)
+        })
+    }
 }
 
 impl Client {
@@ -77,17 +128,48 @@ impl Client {
         let ack_sub = self.nats_connection.subscribe(&ack_inbox)?;
         self.nats_connection
             .publish_request(&stan_subject, &ack_inbox, &buf)?;
-        let resp = ack_sub.next_timeout(time::Duration::from_secs(DEFAULT_ACK_WAIT.into()))?;
+        let resp = ack_sub.next_timeout(time::Duration::from_secs(1))?;
         process_ack(resp)
     }
 
-    fn nats_request<Req: Message, Res: Message + Default>(
+    pub fn subscribe(&mut self, subject: &str, queue_group: Option<&str>) -> io::Result<Subscription> {
+        let inbox = self.nats_connection.new_inbox();
+        let sub = self.nats_connection.subscribe(&inbox)?;
+
+        let req = proto::SubscriptionRequest {
+            client_id: self.client_id.to_owned(),
+            subject: subject.to_string(),
+            q_group: queue_group.unwrap_or("").to_string(),
+            inbox: inbox.to_owned(),
+            durable_name: "".to_string(),
+            max_in_flight: DEFAULT_MAX_INFLIGHT,
+            ack_wait_in_secs: DEFAULT_ACK_WAIT,
+            start_position: proto::StartPosition::LastReceived.into(),
+            start_sequence: 0,
+            start_time_delta: 0,
+        };
+        let res: proto::SubscriptionResponse = self.nats_request(&self.sub_req_subject, req)?;
+        if res.error != "" {
+            return Err(io::Error::new(io::ErrorKind::Other, res.error));
+        }
+
+        Ok(Subscription {
+            subscription: sub,
+            ack_inbox: res.ack_inbox,
+            nats_connection: self.nats_connection.to_owned(),
+            client_id: self.client_id.to_owned(),
+            subject: subject.to_owned(),
+            unsub_req_subject: self.unsub_req_subject.to_owned(),
+        })
+    }
+
+    fn nats_request<Req: prost::Message, Res: prost::Message + Default>(
         &self,
         subject: &str,
         req: Req,
     ) -> io::Result<Res> {
         let mut buf = Vec::new();
-        req.encode(&mut buf).unwrap();
+        req.encode(&mut buf)?;
         let resp = self.nats_connection.request(&subject, buf)?;
         Ok(Res::decode(Bytes::from(resp.data))?)
     }
@@ -133,16 +215,14 @@ pub fn connect(
     let heartbeat_sub = nats_connection
         .subscribe(&heartbeat_subject)?
         .with_handler(process_heartbeat);
-    let conn_id = uuid().as_bytes().to_owned();
 
     let mut client = Client {
         nats_connection,
         cluster_id: cluster_id.to_owned(),
         client_id: client_id.to_owned(),
-        conn_id,
+        conn_id: uuid().as_bytes().to_owned(),
         discover_subject,
         heartbeat_subject,
-        _heartbeat_sub: heartbeat_sub,
 
         pub_prefix: "".to_string(),
         sub_req_subject: "".to_string(),

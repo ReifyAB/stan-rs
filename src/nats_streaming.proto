@@ -34,7 +34,7 @@ message MsgProto {
   uint32 CRC32           = 10; // optional IEEE CRC32
 }
 
-// Ack will deliver an ack for a delivered msg.
+
 message Ack {
   string subject  = 1; // Subject
   uint64 sequence = 2; // Sequence to acknowledge
