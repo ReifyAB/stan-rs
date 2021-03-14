@@ -11,7 +11,7 @@ fn main() -> io::Result<()> {
     println!("sending message 1");
     client.publish("foo", "hello from rust 1")?;
 
-    let sub_handler = client.subscribe("foo", Some("foo-2"))?.with_handler(|msg| {
+    let sub_handler = client.subscribe("foo", Some("foo-2"), None)?.with_handler(|msg| {
         println!("{:?}", from_utf8(&msg.data));
         Ok(())
     });
@@ -22,7 +22,7 @@ fn main() -> io::Result<()> {
 
     sub_handler.unsubscribe()?;
 
-    thread::sleep(time::Duration::from_secs(1));
+    thread::sleep(time::Duration::from_secs(100));
     client.publish("foo", "hello from rust 4")?;
     Ok(())
 }

@@ -65,6 +65,7 @@ pub struct Subscription {
     client_id: String,
     subject: String,
     unsub_req_subject: String,
+    durable_name: String,
 }
 
 impl Drop for Subscription {
@@ -73,7 +74,7 @@ impl Drop for Subscription {
             client_id: self.client_id.to_owned(),
             subject: self.subject.to_owned(),
             inbox: self.ack_inbox.to_owned(),
-            durable_name: "".to_string(),
+            durable_name: self.durable_name.to_owned(),
         };
         let mut buf: Vec<u8> = Vec::new();
         // TODO: better error handling?
@@ -134,16 +135,17 @@ impl Client {
         process_ack(resp)
     }
 
-    pub fn subscribe(&self, subject: &str, queue_group: Option<&str>) -> io::Result<Subscription> {
+    pub fn subscribe(&self, subject: &str, queue_group: Option<&str>, durable_name: Option<&str>) -> io::Result<Subscription> {
         let inbox = self.nats_connection.new_inbox();
         let sub = self.nats_connection.subscribe(&inbox)?;
+        let durable_name = durable_name.unwrap_or("").to_string();
 
         let req = proto::SubscriptionRequest {
             client_id: self.client_id.to_owned(),
             subject: subject.to_string(),
             q_group: queue_group.unwrap_or("").to_string(),
             inbox: inbox.to_owned(),
-            durable_name: "".to_string(),
+            durable_name: durable_name.to_owned(),
             max_in_flight: DEFAULT_MAX_INFLIGHT,
             ack_wait_in_secs: DEFAULT_ACK_WAIT,
             start_position: proto::StartPosition::LastReceived.into(),
@@ -162,6 +164,7 @@ impl Client {
             client_id: self.client_id.to_owned(),
             subject: subject.to_owned(),
             unsub_req_subject: self.unsub_req_subject.to_owned(),
+            durable_name: durable_name.to_owned(),
         })
     }
 
