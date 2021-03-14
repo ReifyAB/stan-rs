@@ -5,7 +5,9 @@ authors = ["Jell <jean-louis@reify.se>"]
 edition = "2018"
 license = "Apache-2.0"
 description = "NATS Streaming client based on official NATS rust client"
+documentation = "https://docs.rs/stan"
 repository = "https://github.com/ReifyAB/stan-rs"
+homepage = "https://github.com/ReifyAB/stan-rs"
 
 [dependencies]
 bytes = "1.0.1"
