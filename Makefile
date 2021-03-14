@@ -8,7 +8,10 @@ run:
 test:
 	cargo test
 
-.PHONY: publish
-publish: test
+.PHONY: readme
+readme:
 	cargo readme > README.md
+
+.PHONY: publish
+publish: test readme
 	cargo publish

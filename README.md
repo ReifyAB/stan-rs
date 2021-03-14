@@ -44,7 +44,7 @@ fn main() -> io::Result<()> {
 ```toml
 [dependencies]
 nats = "0.9.7"
-stan = "0.0.6"
+stan = "0.0.7"
 ```
 
 ## Development
