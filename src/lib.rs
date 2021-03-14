@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/stan/0.0.4")]
+#![doc(html_root_url = "https://docs.rs/stan/0.0.5")]
 
 use bytes::Bytes;
 use prost::Message;
