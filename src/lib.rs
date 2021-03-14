@@ -132,7 +132,7 @@ impl Client {
         process_ack(resp)
     }
 
-    pub fn subscribe(&mut self, subject: &str, queue_group: Option<&str>) -> io::Result<Subscription> {
+    pub fn subscribe(&self, subject: &str, queue_group: Option<&str>) -> io::Result<Subscription> {
         let inbox = self.nats_connection.new_inbox();
         let sub = self.nats_connection.subscribe(&inbox)?;
 

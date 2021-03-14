@@ -4,7 +4,7 @@ use std::{io, thread, time};
 
 fn main() -> io::Result<()> {
     let nc = nats::connect("nats://127.0.0.1:4222")?;
-    let mut client = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    let client = stan::connect(nc, "test-cluster", "rust-client-1")?;
 
     println!("Connected: {:?}", client);
 
@@ -20,6 +20,7 @@ fn main() -> io::Result<()> {
     println!("sending message 2");
     client.publish("foo", "hello from rust 3")?;
 
+    thread::sleep(time::Duration::from_secs(100));
     client.publish("foo", "hello from rust 4")?;
     Ok(())
 }
