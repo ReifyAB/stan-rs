@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use prost::Message;
-use std::{fmt, io, time};
+use std::{fmt, io, sync::Arc, time};
 use uuid::Uuid;
 
 mod proto;
@@ -57,18 +57,23 @@ pub struct Client {
     heartbeat_subject: String,
 }
 
-#[derive(Debug,Clone)]
+
+#[derive(Clone)]
 pub struct Subscription {
     subscription: nats::Subscription,
-    nats_connection: nats::Connection,
-    ack_inbox: String,
-    client_id: String,
-    subject: String,
-    unsub_req_subject: String,
-    durable_name: String,
+    inner: Arc<InnerSub>,
 }
 
-impl Drop for Subscription {
+struct InnerSub {
+    nats_connection: nats::Connection,
+    client_id: String,
+    subject: String,
+    ack_inbox: String,
+    durable_name: String,
+    unsub_req_subject: String,
+}
+
+impl Drop for InnerSub {
     fn drop(&mut self) {
         let req = proto::UnsubscribeRequest {
             client_id: self.client_id.to_owned(),
@@ -82,6 +87,7 @@ impl Drop for Subscription {
         self.nats_connection
             .publish(&self.unsub_req_subject, &buf)
             .unwrap_or_else(|e| println!("{:?}", e));
+        println!("unsubed")
     }
 }
 
@@ -93,7 +99,7 @@ impl Subscription {
         };
         let mut buf: Vec<u8> = Vec::new();
         ack.encode(&mut buf)?;
-        self.nats_connection.publish(&self.ack_inbox, &buf)
+        self.inner.nats_connection.publish(&self.inner.ack_inbox, &buf)
     }
 
     pub fn with_handler<F>(self, handler: F) -> nats::subscription::Handler
@@ -159,12 +165,14 @@ impl Client {
 
         Ok(Subscription {
             subscription: sub,
-            ack_inbox: res.ack_inbox,
-            nats_connection: self.nats_connection.to_owned(),
-            client_id: self.client_id.to_owned(),
-            subject: subject.to_owned(),
-            unsub_req_subject: self.unsub_req_subject.to_owned(),
-            durable_name: durable_name.to_owned(),
+            inner: Arc::new(InnerSub{
+                ack_inbox: res.ack_inbox,
+                nats_connection: self.nats_connection.to_owned(),
+                client_id: self.client_id.to_owned(),
+                subject: subject.to_owned(),
+                unsub_req_subject: self.unsub_req_subject.to_owned(),
+                durable_name: durable_name.to_owned(),
+            })
         })
     }
 

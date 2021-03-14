@@ -22,7 +22,7 @@ fn main() -> io::Result<()> {
 
     sub_handler.unsubscribe()?;
 
-    thread::sleep(time::Duration::from_secs(100));
+    thread::sleep(time::Duration::from_secs(1));
     client.publish("foo", "hello from rust 4")?;
     Ok(())
 }
