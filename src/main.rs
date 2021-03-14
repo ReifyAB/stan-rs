@@ -1,6 +1,6 @@
 use nats;
 use stan;
-use std::{io, thread, time};
+use std::{io, str::from_utf8, thread, time};
 
 fn main() -> io::Result<()> {
     let nc = nats::connect("nats://127.0.0.1:4222")?;
@@ -11,8 +11,8 @@ fn main() -> io::Result<()> {
     println!("sending message 1");
     client.publish("foo", "hello from rust 1")?;
 
-    client.subscribe("foo", Some("foo"))?.with_handler(|msg| {
-        println!("{:?}", msg);
+    let sub_handler = client.subscribe("foo", Some("foo-2"))?.with_handler(|msg| {
+        println!("{:?}", from_utf8(&msg.data));
         Ok(())
     });
 
@@ -20,7 +20,9 @@ fn main() -> io::Result<()> {
     println!("sending message 2");
     client.publish("foo", "hello from rust 3")?;
 
-    thread::sleep(time::Duration::from_secs(100));
+    sub_handler.unsubscribe()?;
+
+    thread::sleep(time::Duration::from_secs(1));
     client.publish("foo", "hello from rust 4")?;
     Ok(())
 }

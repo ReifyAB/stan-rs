@@ -57,6 +57,7 @@ pub struct Client {
     heartbeat_subject: String,
 }
 
+#[derive(Debug,Clone)]
 pub struct Subscription {
     subscription: nats::Subscription,
     nats_connection: nats::Connection,
@@ -66,7 +67,6 @@ pub struct Subscription {
     unsub_req_subject: String,
 }
 
-/*
 impl Drop for Subscription {
     fn drop(&mut self) {
         let req = proto::UnsubscribeRequest {
@@ -76,33 +76,35 @@ impl Drop for Subscription {
             durable_name: "".to_string(),
         };
         let mut buf: Vec<u8> = Vec::new();
+        // TODO: better error handling?
         req.encode(&mut buf).unwrap_or_else(|e| println!("{:?}", e));
         self.nats_connection
             .publish(&self.unsub_req_subject, &buf)
             .unwrap_or_else(|e| println!("{:?}", e));
-        println!("unsub!");
     }
 }
-*/
 
 impl Subscription {
+    fn ack_msg(&self, m: proto::MsgProto) -> io::Result<()> {
+        let ack = proto::Ack {
+            subject: m.subject.to_owned(),
+            sequence: m.sequence,
+        };
+        let mut buf: Vec<u8> = Vec::new();
+        ack.encode(&mut buf)?;
+        self.nats_connection.publish(&self.ack_inbox, &buf)
+    }
+
     pub fn with_handler<F>(self, handler: F) -> nats::subscription::Handler
     where
         F: Fn(proto::MsgProto) -> io::Result<()> + Send + 'static,
     {
-        let ack_inbox = self.ack_inbox.to_owned();
-        self.subscription.with_handler(move |msg| {
+        self.subscription.clone().with_handler(move |msg| {
             let m = proto::MsgProto::decode(Bytes::from(msg.data))?;
 
             handler(m.to_owned())?;
 
-            let ack = proto::Ack {
-                subject: m.subject.to_owned(),
-                sequence: m.sequence,
-            };
-            let mut buf: Vec<u8> = Vec::new();
-            ack.encode(&mut buf)?;
-            msg.client.publish(&ack_inbox, None, None, &buf)
+            self.ack_msg(m)
         })
     }
 }
