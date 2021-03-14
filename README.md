@@ -1,7 +1,7 @@
 # stan-rs
 [![License Apache 2](https://img.shields.io/badge/License-Apache2-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Crates.io](https://img.shields.io/crates/v/stan.svg)](https://crates.io/crates/stan)
-[![Documentation](https://docs.rs/nats/badge.svg)](https://docs.rs/nats/)
+[![Documentation](https://docs.rs/stan/badge.svg)](https://docs.rs/stan/)
 
 NATS Streaming client wrapper built on top of [NATS.rs](https://github.com/nats-io/nats.rs)
 
