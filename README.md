@@ -1,6 +1,7 @@
 # stan-rs
 [![License Apache 2](https://img.shields.io/badge/License-Apache2-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Crates.io](https://img.shields.io/crates/v/stan.svg)](https://crates.io/crates/stan)
+[![Documentation](https://docs.rs/nats/badge.svg)](https://docs.rs/nats/)
 
 NATS Streaming client wrapper built on top of [NATS.rs](https://github.com/nats-io/nats.rs)
 
@@ -13,7 +14,7 @@ Supports publishing and basic subscription.
 ```toml
 [dependencies]
 nats = "0.9.7"
-stan = "0.0.3"
+stan = "0.0.4"
 ```
 
 ## Example useage:

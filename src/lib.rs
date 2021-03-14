@@ -1,3 +1,5 @@
+#![doc(html_root_url = "https://docs.rs/stan/0.0.4")]
+
 use bytes::Bytes;
 use prost::Message;
 use std::{fmt, io, sync::Arc, time};
@@ -9,8 +11,8 @@ const DEFAULT_ACKS_SUBJECT: &str = "_STAN.acks";
 const DEFAULT_DISCOVER_SUBJECT: &str = "_STAN.discover";
 const DEFAULT_ACK_WAIT: i32 = 5;
 const DEFAULT_MAX_INFLIGHT: i32 = 1024;
-const DEFAULT_CONNECT_TIMEOUT: i32 = 2;
-const DEFAULT_MAX_PUB_ACKS_INFLIGHT: i32 = 16384;
+const _DEFAULT_CONNECT_TIMEOUT: i32 = 2;
+const _DEFAULT_MAX_PUB_ACKS_INFLIGHT: i32 = 16384;
 const PROTOCOL: i32 = 1;
 const DEFAULT_PING_INTERVAL: i32 = 5;
 const DEFAULT_PING_MAX_OUT: i32 = 88;
@@ -225,7 +227,7 @@ pub fn connect(
 ) -> io::Result<Client> {
     let discover_subject = DEFAULT_DISCOVER_SUBJECT.to_owned() + "." + cluster_id;
     let heartbeat_subject = uuid();
-    let heartbeat_sub = nats_connection
+    let _heartbeat_sub = nats_connection
         .subscribe(&heartbeat_subject)?
         .with_handler(process_heartbeat);
 
