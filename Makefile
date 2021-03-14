@@ -10,4 +10,5 @@ test:
 
 .PHONY: publish
 publish: test
+	cargo readme > README.md
 	cargo publish

@@ -1,7 +1,8 @@
-# stan-rs
 [![License Apache 2](https://img.shields.io/badge/License-Apache2-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Crates.io](https://img.shields.io/crates/v/stan.svg)](https://crates.io/crates/stan)
 [![Documentation](https://docs.rs/stan/badge.svg)](https://docs.rs/stan/)
+
+# stan
 
 NATS Streaming client wrapper built on top of [NATS.rs](https://github.com/nats-io/nats.rs)
 
@@ -9,19 +10,9 @@ Just a very early prototype.
 
 Supports publishing and basic subscription.
 
-## Installation
-
-```toml
-[dependencies]
-nats = "0.9.7"
-stan = "0.0.6"
-```
-
-## Example useage:
-
+## Examples
 ```rust
 use nats;
-use stan;
 use std::{io, str::from_utf8};
 
 fn main() -> io::Result<()> {
@@ -46,7 +37,14 @@ fn main() -> io::Result<()> {
 
     Ok(())
 }
+```
 
+## Installation
+
+```toml
+[dependencies]
+nats = "0.9.7"
+stan = "0.0.6"
 ```
 
 ## Development

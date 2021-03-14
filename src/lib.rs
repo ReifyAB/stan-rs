@@ -1,5 +1,40 @@
 #![doc(html_root_url = "https://docs.rs/stan/0.0.6")]
 
+//! NATS Streaming client wrapper built on top of [NATS.rs](https://github.com/nats-io/nats.rs)
+//!
+//! Just a very early prototype.
+//!
+//! Supports publishing and basic subscription.
+//!
+//! # Examples
+//! ```
+//! use nats;
+//! use std::{io, str::from_utf8};
+//!
+//! fn main() -> io::Result<()> {
+//!     let nc = nats::connect("nats://127.0.0.1:4222")?;
+//!     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+//!
+//!     sc.publish("foo", "hello from rust 1")?;
+//!
+//!     let sub = sc
+//!         .subscribe("foo", Some("foo-2"), None)?
+//!         .with_handler(|msg| {
+//!             println!("{:?}", from_utf8(&msg.data));
+//!             Ok(())
+//!         });
+//!
+//!     sc.publish("foo", "hello from rust 2")?;
+//!     sc.publish("foo", "hello from rust 3")?;
+//!
+//!     sub.unsubscribe()?;
+//!
+//!     sc.publish("foo", "hello from rust 4")?;
+//!
+//!     Ok(())
+//! }
+//! ```
+
 use bytes::Bytes;
 use prost::Message;
 use std::{fmt, io, sync::Arc, time};
