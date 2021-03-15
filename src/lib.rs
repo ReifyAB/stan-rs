@@ -157,7 +157,7 @@ impl Subscription {
             let sequence = m.sequence;
             let nats_connection = &self.inner.nats_connection;
             let ack_inbox = &self.inner.ack_inbox;
-            let acked: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+            let acked: Mutex<bool> = Mutex::new(false);
             let ack = || {
                 let mut a = acked.lock().unwrap();
                 if !*a {
