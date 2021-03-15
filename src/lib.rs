@@ -37,7 +37,12 @@
 
 use bytes::Bytes;
 use prost::Message as ProstMessage;
-use std::{convert::TryInto, fmt, io, sync::{Arc, Mutex}, time};
+use std::{
+    convert::TryInto,
+    fmt, io,
+    sync::{Arc, Mutex},
+    time,
+};
 use uuid::Uuid;
 
 mod proto;
@@ -175,7 +180,7 @@ impl Subscription {
 
             handler(&msg)?;
 
-            ack()
+            msg.ack()
         })
     }
 }
