@@ -146,7 +146,51 @@ fn ack_msg(
 
 type Ack<'a> = &'a dyn Fn() -> io::Result<()>;
 
+/// NATS Streaming subscription
 impl Subscription {
+    /// Process subscription messages in a separate thread.
+    /// Messages are automatically acked unless the handler returns an error.
+    /// Messages can also be manually acked by calling msg.ack().
+    ///
+    /// # Examples:
+    ///
+    /// Automatic ack:
+    ///```
+    /// use nats;
+    /// use std::{io, str::from_utf8};
+    /// fn main() -> io::Result<()> {
+    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///
+    ///    sc.subscribe("foo", Default::default())?
+    ///        .with_handler(|msg| {
+    ///            println!("{:?}", from_utf8(msg.data));
+    ///            Ok(())
+    ///        });
+    ///
+    ///    Ok(())
+    /// }
+    ///```
+    ///
+    /// Manual ack:
+    ///```
+    /// use nats;
+    /// use std::{io, str::from_utf8};
+    /// fn main() -> io::Result<()> {
+    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///
+    ///    sc.subscribe("foo", Default::default())?
+    ///        .with_handler(|msg| {
+    ///            println!("{:?}", from_utf8(msg.data));
+    ///            msg.ack()?;
+    ///            println!("this happens after the ack");
+    ///            Ok(())
+    ///        });
+    ///
+    ///    Ok(())
+    /// }
+    ///```
     pub fn with_handler<F>(self, handler: F) -> nats::subscription::Handler
     where
         F: Fn(&Message) -> io::Result<()> + Send + 'static,
