@@ -9,7 +9,7 @@ fn main() -> io::Result<()> {
     sc.publish("foo", "hello from rust 1")?;
 
     let sub = sc
-        .subscribe("foo", Some("foo-2"), None)?
+        .subscribe("foo", Default::default())?
         .with_handler(|msg| {
             println!("{:?}", from_utf8(&msg.data));
             Ok(())

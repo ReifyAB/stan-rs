@@ -18,7 +18,7 @@
 //!     sc.publish("foo", "hello from rust 1")?;
 //!
 //!     let sub = sc
-//!         .subscribe("foo", Some("foo-2"), None)?
+//!         .subscribe("foo", Default::default())?
 //!         .with_handler(|msg| {
 //!             println!("{:?}", from_utf8(&msg.data));
 //!             Ok(())
@@ -37,7 +37,7 @@
 
 use bytes::Bytes;
 use prost::Message;
-use std::{fmt, io, sync::Arc, time};
+use std::{convert::TryInto, fmt, io, sync::Arc, time};
 use uuid::Uuid;
 
 mod proto;
@@ -76,7 +76,6 @@ fn process_ack(msg: nats::Message) -> io::Result<()> {
     Ok(())
 }
 
-
 #[derive(Clone)]
 pub struct Client {
     nats_connection: nats::Connection,
@@ -93,7 +92,6 @@ pub struct Client {
     discover_subject: String,
     heartbeat_subject: String,
 }
-
 
 #[derive(Clone)]
 pub struct Subscription {
@@ -136,7 +134,9 @@ impl Subscription {
         };
         let mut buf: Vec<u8> = Vec::new();
         ack.encode(&mut buf)?;
-        self.inner.nats_connection.publish(&self.inner.ack_inbox, &buf)
+        self.inner
+            .nats_connection
+            .publish(&self.inner.ack_inbox, &buf)
     }
 
     pub fn with_handler<F>(self, handler: F) -> nats::subscription::Handler
@@ -150,6 +150,88 @@ impl Subscription {
 
             self.ack_msg(m)
         })
+    }
+}
+
+#[derive(Debug)]
+pub enum SubscriptionStart {
+    NewOnly,
+    LastReceived,
+    AllAvailable,
+    FromSequence(u64),
+    FromTimestamp(time::SystemTime),
+    FromPast(time::Duration),
+}
+
+#[derive(Debug)]
+pub struct SubscriptionConfig<'a> {
+    queue_group: Option<&'a str>,
+    durable_name: Option<&'a str>,
+    start: SubscriptionStart,
+    max_in_flight: i32,
+    ack_wait_in_secs: i32,
+}
+
+fn u128_to_i64(i: u128) -> io::Result<i64> {
+    let conversion: Result<i64, std::num::TryFromIntError> = i.try_into();
+    match conversion {
+        Ok(delta) => Ok(-delta),
+        Err(err) => Err(io::Error::new(io::ErrorKind::Other, err)),
+    }
+}
+
+impl<'a> SubscriptionConfig<'a> {
+    fn start_position(&self) -> i32 {
+        match self.start {
+            SubscriptionStart::NewOnly => proto::StartPosition::NewOnly,
+            SubscriptionStart::LastReceived => proto::StartPosition::LastReceived,
+            SubscriptionStart::AllAvailable => proto::StartPosition::First,
+            SubscriptionStart::FromSequence(_) => proto::StartPosition::SequenceStart,
+            SubscriptionStart::FromTimestamp(_) | SubscriptionStart::FromPast(_) => {
+                proto::StartPosition::TimeDeltaStart
+            }
+        }
+        .into()
+    }
+
+    fn start_sequence(&self) -> u64 {
+        if let SubscriptionStart::FromSequence(seq) = self.start {
+            seq
+        } else {
+            0
+        }
+    }
+
+    fn start_time_delta(&self) -> io::Result<i64> {
+        match self.start {
+            SubscriptionStart::FromTimestamp(t) => {
+                let now = time::SystemTime::now();
+                if t > now {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "SubscriptionStart::FromTimestamp is in the future",
+                    ));
+                }
+                match now.duration_since(t) {
+                    Ok(d) => u128_to_i64(d.as_nanos()),
+                    Err(err) => Err(io::Error::new(io::ErrorKind::InvalidInput, err)),
+                }
+            }
+            SubscriptionStart::FromPast(d) => u128_to_i64(d.as_nanos()),
+            _ => Ok(0),
+        }
+    }
+}
+
+impl <'a>Default for SubscriptionConfig<'a> {
+    fn default() -> Self {
+        Self {
+            queue_group: None,
+            durable_name: None,
+            start: SubscriptionStart::LastReceived,
+            max_in_flight: DEFAULT_MAX_INFLIGHT,
+            ack_wait_in_secs: DEFAULT_ACK_WAIT,
+        }
     }
 }
 
@@ -178,22 +260,22 @@ impl Client {
         process_ack(resp)
     }
 
-    pub fn subscribe(&self, subject: &str, queue_group: Option<&str>, durable_name: Option<&str>) -> io::Result<Subscription> {
+    pub fn subscribe(&self, subject: &str, config: SubscriptionConfig) -> io::Result<Subscription> {
         let inbox = self.nats_connection.new_inbox();
         let sub = self.nats_connection.subscribe(&inbox)?;
-        let durable_name = durable_name.unwrap_or("").to_string();
+        let durable_name = config.durable_name.unwrap_or("").to_string();
 
         let req = proto::SubscriptionRequest {
             client_id: self.client_id.to_owned(),
             subject: subject.to_string(),
-            q_group: queue_group.unwrap_or("").to_string(),
+            q_group: config.queue_group.unwrap_or("").to_string(),
             inbox: inbox.to_owned(),
             durable_name: durable_name.to_owned(),
-            max_in_flight: DEFAULT_MAX_INFLIGHT,
-            ack_wait_in_secs: DEFAULT_ACK_WAIT,
-            start_position: proto::StartPosition::LastReceived.into(),
-            start_sequence: 0,
-            start_time_delta: 0,
+            max_in_flight: config.max_in_flight,
+            ack_wait_in_secs: config.ack_wait_in_secs,
+            start_position: config.start_position(),
+            start_sequence: config.start_sequence(),
+            start_time_delta: config.start_time_delta()?,
         };
         let res: proto::SubscriptionResponse = self.nats_request(&self.sub_req_subject, req)?;
         if res.error != "" {
@@ -202,14 +284,14 @@ impl Client {
 
         Ok(Subscription {
             subscription: sub,
-            inner: Arc::new(InnerSub{
+            inner: Arc::new(InnerSub {
                 ack_inbox: res.ack_inbox,
                 nats_connection: self.nats_connection.to_owned(),
                 client_id: self.client_id.to_owned(),
                 subject: subject.to_owned(),
                 unsub_req_subject: self.unsub_req_subject.to_owned(),
                 durable_name: durable_name.to_owned(),
-            })
+            }),
         })
     }
 
