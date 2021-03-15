@@ -22,20 +22,27 @@ fn main() -> io::Result<()> {
 
     sc.publish("foo", "hello from rust 1")?;
 
-    let sub = sc
+    let sub1 = sc
         .subscribe("foo", Default::default())?
         .with_handler(|msg| {
-            println!("{:?}", from_utf8(&msg.data));
+            println!("sub1 got {:?}", from_utf8(msg.data));
+            msg.ack()?;
+            println!("manually acked!");
+            Ok(())
+        });
+
+    sc.subscribe("foo", Default::default())?
+        .with_handler(|msg| {
+            println!("sub 2 got {:?}", from_utf8(msg.data));
             Ok(())
         });
 
     sc.publish("foo", "hello from rust 2")?;
     sc.publish("foo", "hello from rust 3")?;
 
-    sub.unsubscribe()?;
+    sub1.unsubscribe()?;
 
     sc.publish("foo", "hello from rust 4")?;
-
     Ok(())
 }
 ```

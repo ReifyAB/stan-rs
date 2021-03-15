@@ -8,12 +8,12 @@ fn main() -> io::Result<()> {
 
     sc.publish("foo", "hello from rust 1")?;
 
-    let sub = sc
+    let sub1 = sc
         .subscribe("foo", Default::default())?
         .with_handler(|msg| {
             println!("sub1 got {:?}", from_utf8(msg.data));
             msg.ack()?;
-            println!("acked!");
+            println!("manually acked!");
             Ok(())
         });
 
@@ -26,7 +26,7 @@ fn main() -> io::Result<()> {
     sc.publish("foo", "hello from rust 2")?;
     sc.publish("foo", "hello from rust 3")?;
 
-    sub.unsubscribe()?;
+    sub1.unsubscribe()?;
 
     thread::sleep(time::Duration::from_secs(1));
     sc.publish("foo", "hello from rust 4")?;
