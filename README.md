@@ -1,6 +1,7 @@
 [![License Apache 2](https://img.shields.io/badge/License-Apache2-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Crates.io](https://img.shields.io/crates/v/stan.svg)](https://crates.io/crates/stan)
 [![Documentation](https://docs.rs/stan/badge.svg)](https://docs.rs/stan/)
+[![Build Status](https://travis-ci.com/ReifyAB/stan-rs.svg?branch=main)](https://travis-ci.com/ReifyAB/stan-rs)
 
 # stan
 
@@ -22,7 +23,7 @@ fn main() -> io::Result<()> {
     sc.publish("foo", "hello from rust 1")?;
 
     let sub = sc
-        .subscribe("foo", Some("foo-2"), None)?
+        .subscribe("foo", Default::default())?
         .with_handler(|msg| {
             println!("{:?}", from_utf8(&msg.data));
             Ok(())
