@@ -288,6 +288,12 @@ pub struct Message<'a> {
     pub ack: Ack<'a>,
 }
 
+impl<'a> Message<'a> {
+    pub fn ack(&self) -> io::Result<()> {
+        (self.ack)()
+    }
+}
+
 impl Client {
     /// Publish to a given subject. Will return an error if failed to
     /// receive a ack back from the streaming server.
