@@ -153,18 +153,34 @@ impl Subscription {
 
 #[derive(Debug)]
 pub enum SubscriptionStart {
+    /// Only receive new messages, starting from now (Default)
     NewOnly,
+    /// Start receiving from the last received message. Use in
+    /// combination with a durable queue.
     LastReceived,
+    /// Send all available messages on the subject
     AllAvailable,
+    /// Start at a given message sequence. You can use that to build your own durable queue
     FromSequence(u64),
+    /// Replay starting from a given timestamp (need to be in the past)
     FromTimestamp(time::SystemTime),
+    /// Replay from a duration in the past
     FromPast(time::Duration),
+}
+
+impl Default for SubscriptionStart {
+    fn default() -> Self {
+        Self::NewOnly
+    }
 }
 
 #[derive(Debug)]
 pub struct SubscriptionConfig<'a> {
+    /// Name of the queue group, see: https://docs.nats.io/nats-concepts/queue
     queue_group: Option<&'a str>,
+    /// Set this to keep position after reconnect, see: https://docs.nats.io/developing-with-nats-streaming/durables
     durable_name: Option<&'a str>,
+    /// Position to start the subscription from
     start: SubscriptionStart,
     max_in_flight: i32,
     ack_wait_in_secs: i32,
@@ -234,6 +250,20 @@ impl <'a>Default for SubscriptionConfig<'a> {
 }
 
 impl Client {
+    /// Publish to a given subject. Will return an error if failed to
+    /// receive a ack back from the streaming server.
+    ///
+    /// # Example:
+    ///```
+    /// use nats;
+    /// use std::io;
+    /// fn main() -> io::Result<()> {
+    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///
+    ///    sc.publish("foo", "hello from rust 1")
+    /// }
+    ///```
     pub fn publish(&self, subject: &str, msg: impl AsRef<[u8]>) -> io::Result<()> {
         let stan_subject = self.pub_prefix.to_owned() + "." + subject;
 
@@ -258,6 +288,29 @@ impl Client {
         process_ack(resp)
     }
 
+    /// Start a subscription.
+    ///
+    /// # Example:
+    ///```
+    /// use nats;
+    /// use std::{io, str::from_utf8};
+    /// fn main() -> io::Result<()> {
+    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///
+    ///    sc.publish("foo", "hello from rust 1")?;
+    ///
+    ///    let sub = sc
+    ///        .subscribe("foo", Default::default())?
+    ///        .with_handler(|msg| {
+    ///            println!("{:?}", from_utf8(&msg.data));
+    ///            Ok(())
+    ///        });
+    ///
+    ///    sc.publish("foo", "hello from rust 2")?;
+    ///    sc.publish("foo", "hello from rust 3")
+    /// }
+    ///```
     pub fn subscribe(&self, subject: &str, config: SubscriptionConfig) -> io::Result<Subscription> {
         let inbox = self.nats_connection.new_inbox();
         let sub = self.nats_connection.subscribe(&inbox)?;
