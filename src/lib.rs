@@ -155,14 +155,11 @@ impl Subscription {
             let acked: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
             let ack = || {
                 let mut a = acked.lock().unwrap();
-                if *a {
-                    Ok(())
-                } else {
+                if !*a {
                     ack_msg(nats_connection, ack_inbox, subject, sequence)?;
                     *a = true;
-                    Ok(())
-
                 }
+                Ok(())
             };
 
             let msg = Message {
