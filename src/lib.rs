@@ -37,7 +37,7 @@
 
 use bytes::Bytes;
 use prost::Message as ProstMessage;
-use std::{convert::TryInto, fmt, io, sync::Arc, time};
+use std::{convert::TryInto, fmt, io, sync::{Arc, Mutex}, time};
 use uuid::Uuid;
 
 mod proto;
@@ -124,25 +124,46 @@ impl Drop for InnerSub {
     }
 }
 
-impl Subscription {
-    fn ack_msg(&self, m: proto::MsgProto) -> io::Result<()> {
-        let ack = proto::Ack {
-            subject: m.subject.to_owned(),
-            sequence: m.sequence,
-        };
-        let mut buf: Vec<u8> = Vec::new();
-        ack.encode(&mut buf)?;
-        self.inner
-            .nats_connection
-            .publish(&self.inner.ack_inbox, &buf)
-    }
+fn ack_msg(
+    nats_connection: &nats::Connection,
+    ack_inbox: &str,
+    subject: &str,
+    sequence: u64,
+) -> io::Result<()> {
+    let ack = proto::Ack {
+        subject: subject.to_string(),
+        sequence,
+    };
+    let mut buf: Vec<u8> = Vec::new();
+    ack.encode(&mut buf)?;
+    nats_connection.publish(ack_inbox, &buf)
+}
 
+type Ack<'a> = &'a dyn Fn() -> io::Result<()>;
+
+impl Subscription {
     pub fn with_handler<F>(self, handler: F) -> nats::subscription::Handler
     where
         F: Fn(&Message) -> io::Result<()> + Send + 'static,
     {
         self.subscription.clone().with_handler(move |msg| {
             let m = proto::MsgProto::decode(Bytes::from(msg.data))?;
+            let subject = &m.subject;
+            let sequence = m.sequence;
+            let nats_connection = &self.inner.nats_connection;
+            let ack_inbox = &self.inner.ack_inbox;
+            let acked: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+            let ack = || {
+                let mut a = acked.lock().unwrap();
+                if *a {
+                    Ok(())
+                } else {
+                    ack_msg(nats_connection, ack_inbox, subject, sequence)?;
+                    *a = true;
+                    Ok(())
+
+                }
+            };
 
             let msg = Message {
                 sequence: m.sequence,
@@ -152,11 +173,12 @@ impl Subscription {
                     + time::Duration::from_nanos(m.timestamp.try_into().unwrap()),
                 redelivered: m.redelivered,
                 redelivery_count: m.redelivery_count,
+                ack: &ack,
             };
 
             handler(&msg)?;
 
-            self.ack_msg(m)
+            ack()
         })
     }
 }
@@ -266,6 +288,7 @@ pub struct Message<'a> {
     pub timestamp: time::SystemTime,
     pub redelivered: bool,
     pub redelivery_count: u32,
+    pub ack: Ack<'a>,
 }
 
 impl Client {
