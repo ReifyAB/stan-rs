@@ -36,7 +36,7 @@
 //! ```
 
 use bytes::Bytes;
-use prost::Message;
+use prost::Message as ProstMessage;
 use std::{convert::TryInto, fmt, io, sync::Arc, time};
 use uuid::Uuid;
 
@@ -139,12 +139,22 @@ impl Subscription {
 
     pub fn with_handler<F>(self, handler: F) -> nats::subscription::Handler
     where
-        F: Fn(proto::MsgProto) -> io::Result<()> + Send + 'static,
+        F: Fn(&Message) -> io::Result<()> + Send + 'static,
     {
         self.subscription.clone().with_handler(move |msg| {
             let m = proto::MsgProto::decode(Bytes::from(msg.data))?;
 
-            handler(m.to_owned())?;
+            let msg = Message {
+                sequence: m.sequence,
+                subject: &m.subject,
+                data: &m.data,
+                timestamp: time::SystemTime::UNIX_EPOCH
+                    + time::Duration::from_nanos(m.timestamp.try_into().unwrap()),
+                redelivered: m.redelivered,
+                redelivery_count: m.redelivery_count,
+            };
+
+            handler(&msg)?;
 
             self.ack_msg(m)
         })
@@ -177,13 +187,13 @@ impl Default for SubscriptionStart {
 #[derive(Debug)]
 pub struct SubscriptionConfig<'a> {
     /// Name of the queue group, see: https://docs.nats.io/nats-concepts/queue
-    queue_group: Option<&'a str>,
+    pub queue_group: Option<&'a str>,
     /// Set this to keep position after reconnect, see: https://docs.nats.io/developing-with-nats-streaming/durables
-    durable_name: Option<&'a str>,
+    pub durable_name: Option<&'a str>,
     /// Position to start the subscription from
-    start: SubscriptionStart,
-    max_in_flight: i32,
-    ack_wait_in_secs: i32,
+    pub start: SubscriptionStart,
+    pub max_in_flight: i32,
+    pub ack_wait_in_secs: i32,
 }
 
 fn u128_to_i64(i: u128) -> io::Result<i64> {
@@ -237,7 +247,7 @@ impl<'a> SubscriptionConfig<'a> {
     }
 }
 
-impl <'a>Default for SubscriptionConfig<'a> {
+impl<'a> Default for SubscriptionConfig<'a> {
     fn default() -> Self {
         Self {
             queue_group: None,
@@ -247,6 +257,15 @@ impl <'a>Default for SubscriptionConfig<'a> {
             ack_wait_in_secs: DEFAULT_ACK_WAIT,
         }
     }
+}
+
+pub struct Message<'a> {
+    pub sequence: u64,
+    pub subject: &'a str,
+    pub data: &'a Vec<u8>,
+    pub timestamp: time::SystemTime,
+    pub redelivered: bool,
+    pub redelivery_count: u32,
 }
 
 impl Client {
@@ -303,7 +322,7 @@ impl Client {
     ///    let sub = sc
     ///        .subscribe("foo", Default::default())?
     ///        .with_handler(|msg| {
-    ///            println!("{:?}", from_utf8(&msg.data));
+    ///            println!("{:?}", from_utf8(msg.data));
     ///            Ok(())
     ///        });
     ///

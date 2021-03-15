@@ -1,0 +1,7 @@
+sudo: required
+services:
+  - docker
+language: rust
+rust: 1.50.0
+before_script:
+  - docker run -p 4222:4222 -p 8222:8222 nats-streaming
