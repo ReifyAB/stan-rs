@@ -168,13 +168,13 @@ impl Subscription {
             };
 
             let msg = Message {
-                sequence: m.sequence,
+                sequence: &m.sequence,
                 subject: &m.subject,
                 data: &m.data,
-                timestamp: time::SystemTime::UNIX_EPOCH
-                    + time::Duration::from_nanos(m.timestamp.try_into().unwrap()),
-                redelivered: m.redelivered,
-                redelivery_count: m.redelivery_count,
+                timestamp: &(time::SystemTime::UNIX_EPOCH
+                    + time::Duration::from_nanos(m.timestamp.try_into().unwrap())),
+                redelivered: &m.redelivered,
+                redelivery_count: &m.redelivery_count,
                 ack: &ack,
             };
 
@@ -284,12 +284,12 @@ impl<'a> Default for SubscriptionConfig<'a> {
 }
 
 pub struct Message<'a> {
-    pub sequence: u64,
+    pub sequence: &'a u64,
     pub subject: &'a str,
     pub data: &'a Vec<u8>,
-    pub timestamp: time::SystemTime,
-    pub redelivered: bool,
-    pub redelivery_count: u32,
+    pub timestamp: &'a time::SystemTime,
+    pub redelivered: &'a bool,
+    pub redelivery_count: &'a u32,
     pub ack: Ack<'a>,
 }
 
