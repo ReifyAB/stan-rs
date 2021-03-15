@@ -133,11 +133,11 @@ fn ack_msg(
     nats_connection: &nats::Connection,
     ack_inbox: &str,
     subject: &str,
-    sequence: u64,
+    sequence: &u64,
 ) -> io::Result<()> {
     let ack = proto::Ack {
         subject: subject.to_string(),
-        sequence,
+        sequence: sequence.to_owned(),
     };
     let mut buf: Vec<u8> = Vec::new();
     ack.encode(&mut buf)?;
@@ -154,11 +154,13 @@ impl Subscription {
         self.subscription.clone().with_handler(move |msg| {
             let m = proto::MsgProto::decode(Bytes::from(msg.data))?;
             let subject = &m.subject;
-            let sequence = m.sequence;
+            let sequence = &m.sequence;
             let nats_connection = &self.inner.nats_connection;
             let ack_inbox = &self.inner.ack_inbox;
             let acked: Mutex<bool> = Mutex::new(false);
-            let ack = || {
+            let timestamp = &(time::SystemTime::UNIX_EPOCH
+                + time::Duration::from_nanos(m.timestamp.try_into().unwrap()));
+            let ack = &|| {
                 let mut a = acked.lock().unwrap();
                 if !*a {
                     ack_msg(nats_connection, ack_inbox, subject, sequence)?;
@@ -168,14 +170,13 @@ impl Subscription {
             };
 
             let msg = Message {
-                sequence: &m.sequence,
-                subject: &m.subject,
+                sequence,
+                subject,
                 data: &m.data,
-                timestamp: &(time::SystemTime::UNIX_EPOCH
-                    + time::Duration::from_nanos(m.timestamp.try_into().unwrap())),
+                timestamp,
                 redelivered: &m.redelivered,
                 redelivery_count: &m.redelivery_count,
-                ack: &ack,
+                ack,
             };
 
             handler(&msg)?;
