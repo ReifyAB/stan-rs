@@ -55,7 +55,27 @@
 //!     sc.publish("foo", "hello from rust 4")?;
 //!     Ok(())
 //! }
-//! ```
+//!```
+//!
+//! # Rationale
+//!
+//! We were interested in at-least-once delivery with NATS, and the
+//! options here today are NATS Streaming, Lightbridge or Jetstream.
+//!
+//! Jetstream is the future of at-least-once delivery on NATS, but is
+//! still in tech preview, while NATS Streaming has been battle tested
+//! in production.
+//!
+//! At the same time, the NATS team is providing an awesome rust
+//! client that also has support for Jetstream, but they are not
+//! planning on supporting NATS Streaming (reasonable since Jetstream
+//! is around the corner).
+//!
+//! Since NATS Streaming is just a layer on top of NATS, this library
+//! was written to just wrap the nats.rs client to handle the NATS
+//! Streaming protocol, for those like us stuck with NATS Streaming
+//! until Jetstream is production ready.
+//!
 
 use bytes::Bytes;
 use prost::Message as ProstMessage;
@@ -536,6 +556,8 @@ impl Default for SubscriptionStart {
 }
 
 #[derive(Debug)]
+/// Configuration to pass to subscription. Defaults to no queue group,
+/// no durable queue and starts from last received message.
 pub struct SubscriptionConfig<'a> {
     /// Name of the queue group, see: https://docs.nats.io/nats-concepts/queue
     pub queue_group: Option<&'a str>,
@@ -606,6 +628,7 @@ impl<'a> SubscriptionConfig<'a> {
 pub type AckFn = Arc<dyn Fn() -> io::Result<()>>;
 
 #[derive(Clone)]
+/// NATS Streaming message received on subscriptions
 pub struct Message {
     pub sequence: u64,
     pub subject: String,
@@ -638,6 +661,7 @@ impl Message {
 }
 
 #[derive(Clone)]
+/// NATS Streaming client
 pub struct Client {
     nats_connection: nats::Connection,
     cluster_id: String,
