@@ -178,22 +178,100 @@ fn nats_msg_to_stan_msg(
 impl Subscription {
     /// Returns a blocking message iterator.
     /// Same as calling `iter()`.
+    ///```
+    ///# use nats;
+    ///# use std::{io, str::from_utf8};
+    ///#
+    ///# fn main() -> io::Result<()> {
+    ///#     let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///#     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///#
+    ///#     sc.publish("foo", "hello from rust 1")?;
+    ///#
+    ///      for msg in sc.subscribe("foo", Default::default())?.messages() {
+    ///          println!("received: {:?}", from_utf8(&msg.data));
+    ///          msg.ack()?;
+    ///#         break; // just break for the example to run
+    ///      }
+    ///#
+    ///#     Ok(())
+    ///# }
+    ///```
     pub fn messages(&self) -> Iter<'_> {
         Iter { subscription: self }
     }
 
     /// Returns a blocking message iterator.
+    ///```
+    ///# use nats;
+    ///# use std::{io, str::from_utf8};
+    ///#
+    ///# fn main() -> io::Result<()> {
+    ///#     let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///#     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///#
+    ///#     sc.publish("foo", "hello from rust 1")?;
+    ///#
+    ///      for msg in sc.subscribe("foo", Default::default())?.iter() {
+    ///          println!("received: {:?}", from_utf8(&msg.data));
+    ///          msg.ack()?;
+    ///#         break; // just break for the example to run
+    ///      }
+    ///#
+    ///#     Ok(())
+    ///# }
+    ///```
     pub fn iter(&self) -> Iter<'_> {
         Iter { subscription: self }
     }
 
     /// Returns a non-blocking message iterator.
+    ///```
+    ///# use nats;
+    ///# use std::{io, str::from_utf8};
+    ///#
+    ///# fn main() -> io::Result<()> {
+    ///#     let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///#     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///#
+    ///#     sc.publish("foo", "hello from rust 1")?;
+    ///#
+    ///      for msg in sc.subscribe("foo", Default::default())?.try_iter() {
+    ///          println!("received: {:?}", from_utf8(&msg.data));
+    ///          msg.ack()?;
+    ///#         break; // just break for the example to run
+    ///      }
+    ///#
+    ///#     Ok(())
+    ///# }
+    ///```
     pub fn try_iter(&self) -> TryIter<'_> {
         TryIter { subscription: self }
     }
 
     /// Returns a blocking message iterator with a time
     /// deadline for blocking.
+    ///```
+    ///# use nats;
+    ///# use std::{io, str::from_utf8, time};
+    ///#
+    ///# fn main() -> io::Result<()> {
+    ///#     let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///#     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///#
+    ///#     sc.publish("foo", "hello from rust 1")?;
+    ///#
+    ///      for msg in sc
+    ///          .subscribe("foo", Default::default())?
+    ///          .timeout_iter(time::Duration::from_secs(1))
+    ///      {
+    ///          println!("received: {:?}", from_utf8(&msg.data));
+    ///          msg.ack()?;
+    ///#         break; // just break for the example to run
+    ///      }
+    ///#     Ok(())
+    ///# }
+    ///```
     pub fn timeout_iter(&self, timeout: time::Duration) -> TimeoutIter<'_> {
         TimeoutIter {
             subscription: self,
@@ -209,41 +287,41 @@ impl Subscription {
     ///
     /// Automatic ack:
     ///```
-    /// use nats;
-    /// use std::{io, str::from_utf8};
-    /// fn main() -> io::Result<()> {
-    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
-    ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///# use nats;
+    ///# use std::{io, str::from_utf8};
+    ///# fn main() -> io::Result<()> {
+    ///#    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///#    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///#
+    ///     sc.subscribe("foo", Default::default())?
+    ///         .with_handler(|msg| {
+    ///             println!("{:?}", from_utf8(&msg.data));
+    ///             Ok(())
+    ///         });
     ///
-    ///    sc.subscribe("foo", Default::default())?
-    ///        .with_handler(|msg| {
-    ///            println!("{:?}", from_utf8(&msg.data));
-    ///            Ok(())
-    ///        });
-    ///
-    ///    Ok(())
-    /// }
+    ///#    Ok(())
+    ///# }
     ///```
     ///
     /// Manual ack:
     ///```
-    /// use nats;
-    /// use std::{io, str::from_utf8};
-    /// fn main() -> io::Result<()> {
-    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
-    ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///# use nats;
+    ///# use std::{io, str::from_utf8};
+    ///# fn main() -> io::Result<()> {
+    ///#    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///#    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///#
+    ///     sc.subscribe("foo", Default::default())?
+    ///         .with_handler(|msg| {
+    ///             println!("{:?}", from_utf8(&msg.data));
+    ///             msg.ack()?;
+    ///             println!("this happens after the ack");
+    ///             Ok(())
+    ///         });
     ///
-    ///    sc.subscribe("foo", Default::default())?
-    ///        .with_handler(|msg| {
-    ///            println!("{:?}", from_utf8(&msg.data));
-    ///            msg.ack()?;
-    ///            println!("this happens after the ack");
-    ///            Ok(())
-    ///        });
-    ///
-    ///    sc.publish("foo", "hello from rust 1")?;
-    ///    Ok(())
-    /// }
+    ///#    sc.publish("foo", "hello from rust 1")?;
+    ///#    Ok(())
+    ///# }
     ///```
     pub fn with_handler<F>(self, handler: F) -> nats::subscription::Handler
     where
@@ -262,6 +340,23 @@ impl Subscription {
 
     /// Get the next message with blocking, or None if the subscription has been closed
     /// Note: the message needs to be manually acked!
+    ///```
+    /// use nats;
+    /// use std::{io, str::from_utf8};
+    /// fn main() -> io::Result<()> {
+    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///    sc.publish("foo", "hello from rust 1")?;
+    ///
+    ///    let sub = sc.subscribe("foo", Default::default())?;
+    ///    if let Some(msg) = sub.next() {
+    ///       println!("received: {:?}", from_utf8(&msg.data));
+    ///       msg.ack()?
+    ///    }
+    ///
+    ///    Ok(())
+    /// }
+    ///```
     pub fn next(&self) -> Option<Message> {
         let msg = self.nats_subscription.next()?;
         let nats_connection = self.inner.nats_connection.to_owned();
@@ -271,6 +366,23 @@ impl Subscription {
 
     /// Get the next message without blocking, or None if none available
     /// Note: the message needs to be manually acked!
+    ///```
+    /// use nats;
+    /// use std::{io, str::from_utf8};
+    /// fn main() -> io::Result<()> {
+    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///    sc.publish("foo", "hello from rust 1")?;
+    ///
+    ///    let sub = sc.subscribe("foo", Default::default())?;
+    ///    if let Some(msg) = sub.try_next() {
+    ///       println!("received: {:?}", from_utf8(&msg.data));
+    ///       msg.ack()?
+    ///    }
+    ///
+    ///    Ok(())
+    /// }
+    ///```
     pub fn try_next(&self) -> Option<Message> {
         let msg = self.nats_subscription.try_next()?;
         let nats_connection = self.inner.nats_connection.to_owned();
@@ -280,6 +392,23 @@ impl Subscription {
 
     /// Get the next message without blocking, or None if none available
     /// Note: the message needs to be manually acked!
+    ///```
+    /// use nats;
+    /// use std::{io, str::from_utf8};
+    /// fn main() -> io::Result<()> {
+    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///    sc.publish("foo", "hello from rust 1")?;
+    ///
+    ///    let sub = sc.subscribe("foo", Default::default())?;
+    ///    if let Ok(msg) = sub.next_timeout(std::time::Duration::from_secs(1)) {
+    ///       println!("received: {:?}", from_utf8(&msg.data));
+    ///       msg.ack()?
+    ///    }
+    ///
+    ///    Ok(())
+    /// }
+    ///```
     pub fn next_timeout(&self, timeout: time::Duration) -> io::Result<Message> {
         let msg = self.nats_subscription.next_timeout(timeout)?;
         let nats_connection = self.inner.nats_connection.to_owned();
