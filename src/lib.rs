@@ -130,14 +130,18 @@ fn ack_msg(
     nats_connection.publish(ack_inbox, &buf)
 }
 
-fn nats_msg_to_stan_msg(nats_connection: nats::Connection, ack_inbox: String, msg: nats::Message) -> io::Result<Message> {
+fn nats_msg_to_stan_msg(
+    nats_connection: nats::Connection,
+    ack_inbox: String,
+    msg: nats::Message,
+) -> io::Result<Message> {
     let m = proto::MsgProto::decode(Bytes::from(msg.data))?;
     let subject = m.subject.to_owned();
     let sequence = m.sequence.to_owned();
     let acked: Mutex<bool> = Mutex::new(false);
-    let timestamp = time::SystemTime::UNIX_EPOCH
-        + time::Duration::from_nanos(m.timestamp.try_into().unwrap());
-    let ack = Arc::new(move || {
+    let timestamp =
+        time::SystemTime::UNIX_EPOCH + time::Duration::from_nanos(m.timestamp.try_into().unwrap());
+    let ack: AckFn = Arc::new(move || {
         let mut a = acked.lock().unwrap();
         if !*a {
             ack_msg(&nats_connection, &ack_inbox, &subject, &sequence)?;
