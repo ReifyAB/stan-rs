@@ -219,7 +219,6 @@ fn nats_msg_to_stan_msg(
     })
 }
 
-/// NATS Streaming subscription
 impl Subscription {
     /// Returns a blocking message iterator.
     /// Same as calling `iter()`.
