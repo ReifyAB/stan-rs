@@ -78,13 +78,12 @@ fn process_ack(msg: nats::Message) -> io::Result<()> {
     if ack.error != "" {
         return Err(io::Error::new(io::ErrorKind::Other, ack.error));
     }
-    println!("ack: {}", &ack.guid);
     Ok(())
 }
 
 #[derive(Clone)]
 pub struct Subscription {
-    subscription: nats::Subscription,
+    nats_subscription: nats::Subscription,
     inner: Arc<InnerSub>,
 }
 
@@ -111,7 +110,6 @@ impl Drop for InnerSub {
         self.nats_connection
             .publish(&self.unsub_req_subject, &buf)
             .unwrap_or_else(|e| println!("{:?}", e));
-        println!("unsubed")
     }
 }
 
@@ -203,6 +201,7 @@ impl Subscription {
     ///            Ok(())
     ///        });
     ///
+    ///    sc.publish("foo", "hello from rust 1")?;
     ///    Ok(())
     /// }
     ///```
@@ -210,7 +209,7 @@ impl Subscription {
     where
         F: Fn(&Message) -> io::Result<()> + Send + 'static,
     {
-        self.subscription.clone().with_handler(move |msg| {
+        self.nats_subscription.clone().with_handler(move |msg| {
             let nats_connection = self.inner.nats_connection.to_owned();
             let ack_inbox = self.inner.ack_inbox.to_owned();
             let msg = nats_msg_to_stan_msg(nats_connection, ack_inbox, msg)?;
@@ -449,7 +448,7 @@ impl Client {
         }
 
         Ok(Subscription {
-            subscription: sub,
+            nats_subscription: sub,
             inner: Arc::new(InnerSub {
                 ack_inbox: res.ack_inbox,
                 nats_connection: self.nats_connection.to_owned(),
