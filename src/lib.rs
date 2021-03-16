@@ -20,7 +20,7 @@
 //!     let sub1 = sc
 //!         .subscribe("foo", Default::default())?
 //!         .with_handler(|msg| {
-//!             println!("sub1 got {:?}", from_utf8(msg.data));
+//!             println!("sub1 got {:?}", from_utf8(&msg.data));
 //!             msg.ack()?;
 //!             println!("manually acked!");
 //!             Ok(())
@@ -28,7 +28,7 @@
 //!
 //!     sc.subscribe("foo", Default::default())?
 //!         .with_handler(|msg| {
-//!             println!("sub 2 got {:?}", from_utf8(msg.data));
+//!             println!("sub 2 got {:?}", from_utf8(&msg.data));
 //!             Ok(())
 //!         });
 //!
@@ -50,9 +50,9 @@ use std::{
     sync::{Arc, Mutex},
     time,
 };
-use uuid::Uuid;
 
 mod proto;
+mod utils;
 
 const DEFAULT_ACKS_SUBJECT: &str = "_STAN.acks";
 const DEFAULT_DISCOVER_SUBJECT: &str = "_STAN.discover";
@@ -62,12 +62,8 @@ const PROTOCOL: i32 = 1;
 const DEFAULT_PING_INTERVAL: i32 = 5;
 const DEFAULT_PING_MAX_OUT: i32 = 88;
 
-fn uuid() -> String {
-    Uuid::new_v4().to_string()
-}
-
 fn new_ack_inbox() -> String {
-    DEFAULT_ACKS_SUBJECT.to_owned() + "." + &uuid()
+    DEFAULT_ACKS_SUBJECT.to_owned() + "." + &utils::uuid()
 }
 
 fn process_heartbeat(msg: nats::Message) -> io::Result<()> {
@@ -84,23 +80,6 @@ fn process_ack(msg: nats::Message) -> io::Result<()> {
     }
     println!("ack: {}", &ack.guid);
     Ok(())
-}
-
-#[derive(Clone)]
-pub struct Client {
-    nats_connection: nats::Connection,
-    cluster_id: String,
-    client_id: String,
-    conn_id: Vec<u8>,
-
-    pub_prefix: String,
-    sub_req_subject: String,
-    unsub_req_subject: String,
-    close_req_subject: String,
-    sub_close_req_subject: String,
-
-    discover_subject: String,
-    heartbeat_subject: String,
 }
 
 #[derive(Clone)]
@@ -151,7 +130,32 @@ fn ack_msg(
     nats_connection.publish(ack_inbox, &buf)
 }
 
-type Ack<'a> = &'a dyn Fn() -> io::Result<()>;
+fn nats_msg_to_stan_msg(nats_connection: nats::Connection, ack_inbox: String, msg: nats::Message) -> io::Result<Message> {
+    let m = proto::MsgProto::decode(Bytes::from(msg.data))?;
+    let subject = m.subject.to_owned();
+    let sequence = m.sequence.to_owned();
+    let acked: Mutex<bool> = Mutex::new(false);
+    let timestamp = time::SystemTime::UNIX_EPOCH
+        + time::Duration::from_nanos(m.timestamp.try_into().unwrap());
+    let ack = Arc::new(move || {
+        let mut a = acked.lock().unwrap();
+        if !*a {
+            ack_msg(&nats_connection, &ack_inbox, &subject, &sequence)?;
+            *a = true;
+        }
+        Ok(())
+    });
+
+    Ok(Message {
+        sequence: sequence.to_owned(),
+        subject: m.subject.to_owned(),
+        data: m.data,
+        timestamp,
+        redelivered: m.redelivered,
+        redelivery_count: m.redelivery_count,
+        ack,
+    })
+}
 
 /// NATS Streaming subscription
 impl Subscription {
@@ -171,7 +175,7 @@ impl Subscription {
     ///
     ///    sc.subscribe("foo", Default::default())?
     ///        .with_handler(|msg| {
-    ///            println!("{:?}", from_utf8(msg.data));
+    ///            println!("{:?}", from_utf8(&msg.data));
     ///            Ok(())
     ///        });
     ///
@@ -189,7 +193,7 @@ impl Subscription {
     ///
     ///    sc.subscribe("foo", Default::default())?
     ///        .with_handler(|msg| {
-    ///            println!("{:?}", from_utf8(msg.data));
+    ///            println!("{:?}", from_utf8(&msg.data));
     ///            msg.ack()?;
     ///            println!("this happens after the ack");
     ///            Ok(())
@@ -203,32 +207,9 @@ impl Subscription {
         F: Fn(&Message) -> io::Result<()> + Send + 'static,
     {
         self.subscription.clone().with_handler(move |msg| {
-            let m = proto::MsgProto::decode(Bytes::from(msg.data))?;
-            let subject = &m.subject;
-            let sequence = &m.sequence;
-            let nats_connection = &self.inner.nats_connection;
-            let ack_inbox = &self.inner.ack_inbox;
-            let acked: Mutex<bool> = Mutex::new(false);
-            let timestamp = &(time::SystemTime::UNIX_EPOCH
-                + time::Duration::from_nanos(m.timestamp.try_into().unwrap()));
-            let ack = &|| {
-                let mut a = acked.lock().unwrap();
-                if !*a {
-                    ack_msg(nats_connection, ack_inbox, subject, sequence)?;
-                    *a = true;
-                }
-                Ok(())
-            };
-
-            let msg = Message {
-                sequence,
-                subject,
-                data: &m.data,
-                timestamp,
-                redelivered: &m.redelivered,
-                redelivery_count: &m.redelivery_count,
-                ack,
-            };
+            let nats_connection = self.inner.nats_connection.to_owned();
+            let ack_inbox = self.inner.ack_inbox.to_owned();
+            let msg = nats_msg_to_stan_msg(nats_connection, ack_inbox, msg)?;
 
             handler(&msg)?;
 
@@ -272,11 +253,15 @@ pub struct SubscriptionConfig<'a> {
     pub ack_wait_in_secs: i32,
 }
 
-fn u128_to_i64(i: u128) -> io::Result<i64> {
-    let conversion: Result<i64, std::num::TryFromIntError> = i.try_into();
-    match conversion {
-        Ok(delta) => Ok(-delta),
-        Err(err) => Err(io::Error::new(io::ErrorKind::Other, err)),
+impl<'a> Default for SubscriptionConfig<'a> {
+    fn default() -> Self {
+        Self {
+            queue_group: None,
+            durable_name: None,
+            start: SubscriptionStart::LastReceived,
+            max_in_flight: DEFAULT_MAX_INFLIGHT,
+            ack_wait_in_secs: DEFAULT_ACK_WAIT,
+        }
     }
 }
 
@@ -313,42 +298,66 @@ impl<'a> SubscriptionConfig<'a> {
                     ));
                 }
                 match now.duration_since(t) {
-                    Ok(d) => u128_to_i64(d.as_nanos()),
+                    Ok(d) => utils::u128_to_i64(d.as_nanos()),
                     Err(err) => Err(io::Error::new(io::ErrorKind::InvalidInput, err)),
                 }
             }
-            SubscriptionStart::FromPast(d) => u128_to_i64(d.as_nanos()),
+            SubscriptionStart::FromPast(d) => utils::u128_to_i64(d.as_nanos()),
             _ => Ok(0),
         }
     }
 }
 
-impl<'a> Default for SubscriptionConfig<'a> {
-    fn default() -> Self {
-        Self {
-            queue_group: None,
-            durable_name: None,
-            start: SubscriptionStart::LastReceived,
-            max_in_flight: DEFAULT_MAX_INFLIGHT,
-            ack_wait_in_secs: DEFAULT_ACK_WAIT,
-        }
+/// Ack function
+pub type AckFn = Arc<dyn Fn() -> io::Result<()>>;
+
+#[derive(Clone)]
+pub struct Message {
+    pub sequence: u64,
+    pub subject: String,
+    pub data: Vec<u8>,
+    pub timestamp: time::SystemTime,
+    pub redelivered: bool,
+    pub redelivery_count: u32,
+    ack: AckFn,
+}
+
+impl fmt::Debug for Message {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Message")
+            .field("sequence", &self.sequence)
+            .field("subject", &self.subject)
+            .field("data", &self.data)
+            .field("timestamp", &self.timestamp)
+            .field("redelivered", &self.redelivered)
+            .field("redeliverd_count", &self.redelivery_count)
+            .field("ack", &"Fn() -> io::Result<()>")
+            .finish()
     }
 }
 
-pub struct Message<'a> {
-    pub sequence: &'a u64,
-    pub subject: &'a str,
-    pub data: &'a Vec<u8>,
-    pub timestamp: &'a time::SystemTime,
-    pub redelivered: &'a bool,
-    pub redelivery_count: &'a u32,
-    pub ack: Ack<'a>,
-}
-
-impl<'a> Message<'a> {
+impl Message {
+    /// Ack message
     pub fn ack(&self) -> io::Result<()> {
         (self.ack)()
     }
+}
+
+#[derive(Clone)]
+pub struct Client {
+    nats_connection: nats::Connection,
+    cluster_id: String,
+    client_id: String,
+    conn_id: Vec<u8>,
+
+    pub_prefix: String,
+    sub_req_subject: String,
+    unsub_req_subject: String,
+    close_req_subject: String,
+    sub_close_req_subject: String,
+
+    discover_subject: String,
+    heartbeat_subject: String,
 }
 
 impl Client {
@@ -371,7 +380,7 @@ impl Client {
 
         let msg = proto::PubMsg {
             client_id: self.client_id.to_owned(),
-            guid: uuid(),
+            guid: utils::uuid(),
             subject: subject.to_owned(),
             reply: "".to_string(), // unused in stan.go
             data: msg.as_ref().to_vec(),
@@ -405,7 +414,7 @@ impl Client {
     ///    let sub = sc
     ///        .subscribe("foo", Default::default())?
     ///        .with_handler(|msg| {
-    ///            println!("{:?}", from_utf8(msg.data));
+    ///            println!("{:?}", from_utf8(&msg.data));
     ///            Ok(())
     ///        });
     ///
@@ -496,7 +505,7 @@ pub fn connect(
     client_id: &str,
 ) -> io::Result<Client> {
     let discover_subject = DEFAULT_DISCOVER_SUBJECT.to_owned() + "." + cluster_id;
-    let heartbeat_subject = uuid();
+    let heartbeat_subject = utils::uuid();
     let _heartbeat_sub = nats_connection
         .subscribe(&heartbeat_subject)?
         .with_handler(process_heartbeat);
@@ -505,7 +514,7 @@ pub fn connect(
         nats_connection,
         cluster_id: cluster_id.to_owned(),
         client_id: client_id.to_owned(),
-        conn_id: uuid().as_bytes().to_owned(),
+        conn_id: utils::uuid().as_bytes().to_owned(),
         discover_subject,
         heartbeat_subject,
 

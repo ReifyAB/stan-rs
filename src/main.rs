@@ -11,7 +11,7 @@ fn main() -> io::Result<()> {
     let sub1 = sc
         .subscribe("foo", Default::default())?
         .with_handler(|msg| {
-            println!("sub1 got {:?}", from_utf8(msg.data));
+            println!("sub1 got {:?}", from_utf8(&msg.data));
             msg.ack()?;
             println!("manually acked!");
             Ok(())
@@ -19,7 +19,7 @@ fn main() -> io::Result<()> {
 
     sc.subscribe("foo", Default::default())?
         .with_handler(|msg| {
-            println!("sub 2 got {:?}", from_utf8(msg.data));
+            println!("sub 2 got {:?}", from_utf8(&msg.data));
             Ok(())
         });
 
