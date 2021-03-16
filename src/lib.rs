@@ -2,9 +2,8 @@
 
 //! NATS Streaming client wrapper built on top of [NATS.rs](https://github.com/nats-io/nats.rs)
 //!
-//! Just a very early prototype.
-//!
-//! Supports publishing and basic subscription.
+//! Warning: still early stage of development, although feature
+//! complete. Contributions and feedback more than welcome!
 //!
 //! # Examples
 //! ```
