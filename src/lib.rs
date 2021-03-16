@@ -9,7 +9,7 @@
 //! # Examples
 //! ```
 //! use nats;
-//! use std::{io, str::from_utf8};
+//! use std::{io, str::from_utf8, time};
 //!
 //! fn main() -> io::Result<()> {
 //!     let nc = nats::connect("nats://127.0.0.1:4222")?;
@@ -31,6 +31,21 @@
 //!             println!("sub 2 got {:?}", from_utf8(&msg.data));
 //!             Ok(())
 //!         });
+//!
+//!     for msg in sc.subscribe("foo", Default::default())?.messages() {
+//!         println!("sub 3 got {:?}", from_utf8(&msg.data));
+//!         msg.ack()?;
+//!         break; // just break for the example to run
+//!     }
+//!
+//!     for msg in sc
+//!         .subscribe("foo", Default::default())?
+//!         .timeout_iter(time::Duration::from_secs(1))
+//!     {
+//!         println!("sub 4 got {:?}", from_utf8(&msg.data));
+//!         msg.ack()?;
+//!         break; // just break for the example to run
+//!     }
 //!
 //!     sc.publish("foo", "hello from rust 2")?;
 //!     sc.publish("foo", "hello from rust 3")?;
@@ -161,6 +176,31 @@ fn nats_msg_to_stan_msg(
 
 /// NATS Streaming subscription
 impl Subscription {
+    /// Returns a blocking message iterator.
+    /// Same as calling `iter()`.
+    pub fn messages(&self) -> Iter<'_> {
+        Iter { subscription: self }
+    }
+
+    /// Returns a blocking message iterator.
+    pub fn iter(&self) -> Iter<'_> {
+        Iter { subscription: self }
+    }
+
+    /// Returns a non-blocking message iterator.
+    pub fn try_iter(&self) -> TryIter<'_> {
+        TryIter { subscription: self }
+    }
+
+    /// Returns a blocking message iterator with a time
+    /// deadline for blocking.
+    pub fn timeout_iter(&self, timeout: time::Duration) -> TimeoutIter<'_> {
+        TimeoutIter {
+            subscription: self,
+            to: timeout,
+        }
+    }
+
     /// Process subscription messages in a separate thread.
     /// Messages are automatically acked unless the handler returns an error.
     /// Messages can also be manually acked by calling msg.ack().
@@ -218,6 +258,84 @@ impl Subscription {
 
             msg.ack()
         })
+    }
+
+    /// Get the next message with blocking, or None if the subscription has been closed
+    /// Note: the message needs to be manually acked!
+    pub fn next(&self) -> Option<Message> {
+        let msg = self.nats_subscription.next()?;
+        let nats_connection = self.inner.nats_connection.to_owned();
+        let ack_inbox = self.inner.ack_inbox.to_owned();
+        nats_msg_to_stan_msg(nats_connection, ack_inbox, msg).ok()
+    }
+
+    /// Get the next message without blocking, or None if none available
+    /// Note: the message needs to be manually acked!
+    pub fn try_next(&self) -> Option<Message> {
+        let msg = self.nats_subscription.try_next()?;
+        let nats_connection = self.inner.nats_connection.to_owned();
+        let ack_inbox = self.inner.ack_inbox.to_owned();
+        nats_msg_to_stan_msg(nats_connection, ack_inbox, msg).ok()
+    }
+
+    /// Get the next message without blocking, or None if none available
+    /// Note: the message needs to be manually acked!
+    pub fn next_timeout(&self, timeout: time::Duration) -> io::Result<Message> {
+        let msg = self.nats_subscription.next_timeout(timeout)?;
+        let nats_connection = self.inner.nats_connection.to_owned();
+        let ack_inbox = self.inner.ack_inbox.to_owned();
+        nats_msg_to_stan_msg(nats_connection, ack_inbox, msg)
+    }
+}
+
+/// A non-blocking iterator over messages from a `Subscription`
+pub struct TryIter<'a> {
+    subscription: &'a Subscription,
+}
+
+impl<'a> Iterator for TryIter<'a> {
+    type Item = Message;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.subscription.try_next()
+    }
+}
+
+/// An iterator over messages from a `Subscription`
+pub struct Iter<'a> {
+    subscription: &'a Subscription,
+}
+
+impl<'a> Iterator for Iter<'a> {
+    type Item = Message;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.subscription.next()
+    }
+}
+
+/// An iterator over messages from a `Subscription`
+pub struct IntoIter {
+    subscription: Subscription,
+}
+
+impl Iterator for IntoIter {
+    type Item = Message;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.subscription.next()
+    }
+}
+
+/// An iterator over messages from a `Subscription`
+/// where `None` will be returned if a new `Message`
+/// has not been received by the end of a timeout.
+pub struct TimeoutIter<'a> {
+    subscription: &'a Subscription,
+    to: time::Duration,
+}
+
+impl<'a> Iterator for TimeoutIter<'a> {
+    type Item = Message;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.subscription.next_timeout(self.to).ok()
     }
 }
 

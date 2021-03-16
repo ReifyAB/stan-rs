@@ -23,6 +23,21 @@ fn main() -> io::Result<()> {
             Ok(())
         });
 
+    for msg in sc.subscribe("foo", Default::default())?.messages() {
+        println!("sub 3 got {:?}", from_utf8(&msg.data));
+        msg.ack()?;
+        break; // just break for the example to run
+    }
+
+    for msg in sc
+        .subscribe("foo", Default::default())?
+        .timeout_iter(time::Duration::from_secs(1))
+    {
+        println!("sub 4 got {:?}", from_utf8(&msg.data));
+        msg.ack()?;
+        break; // just break for the example to run
+    }
+
     sc.publish("foo", "hello from rust 2")?;
     sc.publish("foo", "hello from rust 3")?;
 
