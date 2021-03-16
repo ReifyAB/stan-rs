@@ -7,14 +7,13 @@
 
 NATS Streaming client wrapper built on top of [NATS.rs](https://github.com/nats-io/nats.rs)
 
-Just a very early prototype.
-
-Supports publishing and basic subscription.
+Warning: still early stage of development, although feature
+complete. Contributions and feedback more than welcome!
 
 ## Examples
 ```rust
 use nats;
-use std::{io, str::from_utf8};
+use std::{io, str::from_utf8, time};
 
 fn main() -> io::Result<()> {
     let nc = nats::connect("nats://127.0.0.1:4222")?;
@@ -37,6 +36,21 @@ fn main() -> io::Result<()> {
             Ok(())
         });
 
+    for msg in sc.subscribe("foo", Default::default())?.messages() {
+        println!("sub 3 got {:?}", from_utf8(&msg.data));
+        msg.ack()?;
+        break; // just break for the example to run
+    }
+
+    for msg in sc
+        .subscribe("foo", Default::default())?
+        .timeout_iter(time::Duration::from_secs(1))
+    {
+        println!("sub 4 got {:?}", from_utf8(&msg.data));
+        msg.ack()?;
+        break; // just break for the example to run
+    }
+
     sc.publish("foo", "hello from rust 2")?;
     sc.publish("foo", "hello from rust 3")?;
 
@@ -47,12 +61,32 @@ fn main() -> io::Result<()> {
 }
 ```
 
+## Rationale
+
+We were interested in at-least-once delivery with NATS, and the
+options here today are NATS Streaming, Lightbridge or Jetstream.
+
+Jetstream is the future of at-least-once delivery on NATS, but is
+still in tech preview, while NATS Streaming has been battle tested
+in production.
+
+At the same time, the NATS team is providing an awesome rust
+client that also has support for Jetstream, but they are not
+planning on supporting NATS Streaming (reasonable since Jetstream
+is around the corner).
+
+Since NATS Streaming is just a layer on top of NATS, this library
+was written to just wrap the nats.rs client to handle the NATS
+Streaming protocol, for those like us stuck with NATS Streaming
+until Jetstream is production ready.
+
+
 ## Installation
 
 ```toml
 [dependencies]
 nats = "0.9.7"
-stan = "0.0.9"
+stan = "0.0.10"
 ```
 
 ## Development
