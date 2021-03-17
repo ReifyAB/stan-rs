@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/stan/0.0.13")]
+#![doc(html_root_url = "https://docs.rs/stan/0.0.14")]
 
 //! NATS Streaming client wrapper built on top of [NATS.rs](https://github.com/nats-io/nats.rs)
 //!
