@@ -189,21 +189,6 @@ impl Drop for InnerSub {
     }
 }
 
-fn ack_msg(
-    nats_connection: &nats::Connection,
-    ack_inbox: &str,
-    subject: &str,
-    sequence: &u64,
-) -> io::Result<()> {
-    let ack = proto::Ack {
-        subject: subject.to_string(),
-        sequence: sequence.to_owned(),
-    };
-    let mut buf: Vec<u8> = Vec::new();
-    ack.encode(&mut buf)?;
-    nats_connection.publish(ack_inbox, &buf)
-}
-
 fn nats_msg_to_stan_msg(
     nats_connection: nats::Connection,
     ack_inbox: String,
@@ -670,15 +655,16 @@ impl fmt::Debug for Message {
 impl Message {
     /// Ack message
     pub fn ack(&self) -> io::Result<()> {
-        let mut a = self.acked.lock().unwrap();
-        if !*a {
-            ack_msg(
-                &self.nats_connection,
-                &self.ack_inbox,
-                &self.subject,
-                &self.sequence,
-            )?;
-            *a = true;
+        let mut acked = self.acked.lock().unwrap();
+        if !*acked {
+            let ack = proto::Ack {
+                subject: self.subject.to_string(),
+                sequence: self.sequence.to_owned(),
+            };
+            let mut buf: Vec<u8> = Vec::new();
+            ack.encode(&mut buf)?;
+            self.nats_connection.publish(&self.ack_inbox, &buf)?;
+            *acked = true;
         }
         Ok(())
     }
