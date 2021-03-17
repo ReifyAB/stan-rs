@@ -86,7 +86,7 @@ until Jetstream is production ready.
 ```toml
 [dependencies]
 nats = "0.9.7"
-stan = "0.0.10"
+stan = "0.0.11"
 ```
 
 ## Development
