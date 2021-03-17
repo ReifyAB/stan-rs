@@ -1,6 +1,6 @@
 [package]
 name = "stan"
-version = "0.0.11"
+version = "0.0.12"
 authors = ["Jell <jean-louis@reify.se>"]
 edition = "2018"
 license = "Apache-2.0"

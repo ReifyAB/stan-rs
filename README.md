@@ -21,18 +21,26 @@ fn main() -> io::Result<()> {
 
     sc.publish("foo", "hello from rust 1")?;
 
-    let sub1 = sc
-        .subscribe("foo", Default::default())?
+    sc.subscribe("foo", Default::default())?
         .with_handler(|msg| {
-            println!("sub1 got {:?}", from_utf8(&msg.data));
-            msg.ack()?;
-            println!("manually acked!");
+            println!("sub 1 got {:?}", from_utf8(&msg.data));
             Ok(())
         });
 
-    sc.subscribe("foo", Default::default())?
+    let sub = sc
+        .subscribe(
+            "foo",
+            stan::SubscriptionConfig {
+                queue_group: Some("queue-group-name"),
+                durable_name: Some("my-durable-queue"),
+                start: stan::SubscriptionStart::AllAvailable,
+                ..Default::default()
+            },
+        )?
         .with_handler(|msg| {
             println!("sub 2 got {:?}", from_utf8(&msg.data));
+            msg.ack()?;
+            println!("manually acked!");
             Ok(())
         });
 
@@ -54,7 +62,7 @@ fn main() -> io::Result<()> {
     sc.publish("foo", "hello from rust 2")?;
     sc.publish("foo", "hello from rust 3")?;
 
-    sub1.unsubscribe()?;
+    sub.unsubscribe()?;
 
     sc.publish("foo", "hello from rust 4")?;
     Ok(())
@@ -86,7 +94,7 @@ until Jetstream is production ready.
 ```toml
 [dependencies]
 nats = "0.9.7"
-stan = "0.0.11"
+stan = "0.0.12"
 ```
 
 ## Development
