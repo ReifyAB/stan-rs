@@ -9,7 +9,15 @@ fn main() -> io::Result<()> {
     sc.publish("foo", "hello from rust 1")?;
 
     let sub1 = sc
-        .subscribe("foo", Default::default())?
+        .subscribe(
+            "foo",
+            stan::SubscriptionConfig {
+                queue_group: Some("queue-group-name"),
+                durable_name: Some("my-durable-queue"),
+                start: stan::SubscriptionStart::AllAvailable,
+                ..Default::default()
+            },
+        )?
         .with_handler(|msg| {
             println!("sub1 got {:?}", from_utf8(&msg.data));
             msg.ack()?;

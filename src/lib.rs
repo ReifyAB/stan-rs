@@ -16,18 +16,26 @@
 //!
 //!     sc.publish("foo", "hello from rust 1")?;
 //!
-//!     let sub1 = sc
-//!         .subscribe("foo", Default::default())?
+//!     sc.subscribe("foo", Default::default())?
 //!         .with_handler(|msg| {
-//!             println!("sub1 got {:?}", from_utf8(&msg.data));
-//!             msg.ack()?;
-//!             println!("manually acked!");
+//!             println!("sub 1 got {:?}", from_utf8(&msg.data));
 //!             Ok(())
 //!         });
 //!
-//!     sc.subscribe("foo", Default::default())?
+//!     let sub = sc
+//!         .subscribe(
+//!             "foo",
+//!             stan::SubscriptionConfig {
+//!                 queue_group: Some("queue-group-name"),
+//!                 durable_name: Some("my-durable-queue"),
+//!                 start: stan::SubscriptionStart::AllAvailable,
+//!                 ..Default::default()
+//!             },
+//!         )?
 //!         .with_handler(|msg| {
 //!             println!("sub 2 got {:?}", from_utf8(&msg.data));
+//!             msg.ack()?;
+//!             println!("manually acked!");
 //!             Ok(())
 //!         });
 //!
@@ -49,7 +57,7 @@
 //!     sc.publish("foo", "hello from rust 2")?;
 //!     sc.publish("foo", "hello from rust 3")?;
 //!
-//!     sub1.unsubscribe()?;
+//!     sub.unsubscribe()?;
 //!
 //!     sc.publish("foo", "hello from rust 4")?;
 //!     Ok(())
@@ -175,8 +183,8 @@ struct InnerSub {
     unsub_req_subject: String,
 }
 
-impl Drop for InnerSub {
-    fn drop(&mut self) {
+impl InnerSub {
+    fn unsubscribe(&self) -> io::Result<()> {
         let req = proto::UnsubscribeRequest {
             client_id: self.client_id.to_owned(),
             subject: self.subject.to_owned(),
@@ -184,11 +192,20 @@ impl Drop for InnerSub {
             durable_name: self.durable_name.to_owned(),
         };
         let mut buf: Vec<u8> = Vec::new();
-        // TODO: better error handling?
-        req.encode(&mut buf).unwrap_or_else(|e| println!("{:?}", e));
-        self.nats_connection
-            .publish(&self.unsub_req_subject, &buf)
-            .unwrap_or_else(|e| println!("{:?}", e));
+        req.encode(&mut buf)?;
+        self.nats_connection.publish(&self.unsub_req_subject, &buf)
+    }
+}
+
+impl Drop for InnerSub {
+    fn drop(&mut self) {
+        // We do not want to unsubscribe a durable subscription by
+        // default, only non-durable ones. See:
+        // https://github.com/nats-io/stan.go#closing-the-group
+        if self.durable_name == "" {
+            // TODO: better error handling?
+            self.unsubscribe().unwrap_or_else(|e| println!("{:?}", e))
+        }
     }
 }
 
@@ -477,6 +494,32 @@ impl Subscription {
         let nats_connection = self.inner.nats_connection.to_owned();
         let ack_inbox = self.inner.ack_inbox.to_owned();
         nats_msg_to_stan_msg(nats_connection, ack_inbox, msg)
+    }
+
+    /// Close this subscription.
+    ///
+    /// For subscriptions that are not durable (i.e. with no
+    /// durable_name), this is called automatically when the
+    /// subscription is dropped.
+    ///
+    /// For durable subscriptions, beware that unsubscribing all the
+    /// clients will also delete the durable queue.
+    ///
+    ///```
+    /// use nats;
+    /// use std::{io, str::from_utf8};
+    /// fn main() -> io::Result<()> {
+    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///
+    ///    let sub = sc.subscribe("foo", Default::default())?;
+    ///    sub.unsubscribe();
+    ///
+    ///    Ok(())
+    /// }
+    ///```
+    pub fn unsubscribe(&self) -> io::Result<()> {
+        self.inner.unsubscribe()
     }
 }
 
