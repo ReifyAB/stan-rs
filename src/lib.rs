@@ -345,9 +345,7 @@ impl Subscription {
             let nats_connection = self.inner.nats_connection.to_owned();
             let ack_inbox = self.inner.ack_inbox.to_owned();
             let msg = Message::from_nats_message(msg, nats_connection, ack_inbox)?;
-
             handler(&msg)?;
-
             msg.ack()
         })
     }
@@ -375,7 +373,6 @@ impl Subscription {
         let msg = self.nats_subscription.next()?;
         let nats_connection = self.inner.nats_connection.to_owned();
         let ack_inbox = self.inner.ack_inbox.to_owned();
-
         Message::from_nats_message(msg, nats_connection, ack_inbox).ok()
     }
 
@@ -602,7 +599,7 @@ impl<'a> SubscriptionConfig<'a> {
     }
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 /// NATS Streaming message received on a given `Subscription`
 pub struct Message {
     pub sequence: u64,
