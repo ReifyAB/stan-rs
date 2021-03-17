@@ -103,17 +103,6 @@ const PROTOCOL: i32 = 1;
 const DEFAULT_PING_INTERVAL: i32 = 5;
 const DEFAULT_PING_MAX_OUT: i32 = 88;
 
-fn new_ack_inbox() -> String {
-    DEFAULT_ACKS_SUBJECT.to_owned() + "." + &utils::uuid()
-}
-
-fn process_heartbeat(msg: nats::Message) -> io::Result<()> {
-    if let Some(reply) = msg.reply {
-        msg.client.publish(&reply, None, None, &[])?;
-    }
-    Ok(())
-}
-
 #[derive(Clone)]
 /// NATS Streaming subscription
 ///
@@ -683,7 +672,12 @@ impl Message {
     pub fn ack(&self) -> io::Result<()> {
         let mut a = self.acked.lock().unwrap();
         if !*a {
-            ack_msg(&self.nats_connection, &self.ack_inbox, &self.subject, &self.sequence)?;
+            ack_msg(
+                &self.nats_connection,
+                &self.ack_inbox,
+                &self.subject,
+                &self.sequence,
+            )?;
             *a = true;
         }
         Ok(())
@@ -739,7 +733,7 @@ impl Client {
         let mut buf: Vec<u8> = Vec::new();
         msg.encode(&mut buf)?;
 
-        let ack_inbox = new_ack_inbox();
+        let ack_inbox = DEFAULT_ACKS_SUBJECT.to_owned() + "." + &utils::uuid();
         let ack_sub = self.nats_connection.subscribe(&ack_inbox)?;
         self.nats_connection
             .publish_request(&stan_subject, &ack_inbox, &buf)?;
@@ -858,9 +852,16 @@ pub fn connect(
 ) -> io::Result<Client> {
     let discover_subject = DEFAULT_DISCOVER_SUBJECT.to_owned() + "." + cluster_id;
     let heartbeat_subject = utils::uuid();
-    let _heartbeat_sub = nats_connection
+
+    // Start heartbeat handler
+    nats_connection
         .subscribe(&heartbeat_subject)?
-        .with_handler(process_heartbeat);
+        .with_handler(|msg| {
+            if let Some(reply) = msg.reply {
+                msg.client.publish(&reply, None, None, &[])?;
+            }
+            Ok(())
+        });
 
     let mut client = Client {
         nats_connection,
