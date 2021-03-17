@@ -189,30 +189,6 @@ impl Drop for InnerSub {
     }
 }
 
-fn nats_msg_to_stan_msg(
-    nats_connection: nats::Connection,
-    ack_inbox: String,
-    msg: nats::Message,
-) -> io::Result<Message> {
-    let m = proto::MsgProto::decode(Bytes::from(msg.data))?;
-    let sequence = m.sequence.to_owned();
-    let timestamp =
-        time::SystemTime::UNIX_EPOCH + time::Duration::from_nanos(m.timestamp.try_into().unwrap());
-    let acked = Arc::new(Mutex::new(false));
-
-    Ok(Message {
-        sequence: sequence.to_owned(),
-        subject: m.subject.to_owned(),
-        data: m.data,
-        timestamp,
-        redelivered: m.redelivered,
-        redelivery_count: m.redelivery_count,
-        nats_connection,
-        ack_inbox,
-        acked,
-    })
-}
-
 impl Subscription {
     /// Returns a blocking message iterator.
     /// Same as calling `iter()`.
@@ -368,7 +344,7 @@ impl Subscription {
         self.nats_subscription.clone().with_handler(move |msg| {
             let nats_connection = self.inner.nats_connection.to_owned();
             let ack_inbox = self.inner.ack_inbox.to_owned();
-            let msg = nats_msg_to_stan_msg(nats_connection, ack_inbox, msg)?;
+            let msg = Message::from_nats_message(msg, nats_connection, ack_inbox)?;
 
             handler(&msg)?;
 
@@ -399,7 +375,8 @@ impl Subscription {
         let msg = self.nats_subscription.next()?;
         let nats_connection = self.inner.nats_connection.to_owned();
         let ack_inbox = self.inner.ack_inbox.to_owned();
-        nats_msg_to_stan_msg(nats_connection, ack_inbox, msg).ok()
+
+        Message::from_nats_message(msg, nats_connection, ack_inbox).ok()
     }
 
     /// Get the next message without blocking, or None if none available
@@ -425,7 +402,7 @@ impl Subscription {
         let msg = self.nats_subscription.try_next()?;
         let nats_connection = self.inner.nats_connection.to_owned();
         let ack_inbox = self.inner.ack_inbox.to_owned();
-        nats_msg_to_stan_msg(nats_connection, ack_inbox, msg).ok()
+        Message::from_nats_message(msg, nats_connection, ack_inbox).ok()
     }
 
     /// Get the next message without blocking, or None if none available
@@ -451,7 +428,7 @@ impl Subscription {
         let msg = self.nats_subscription.next_timeout(timeout)?;
         let nats_connection = self.inner.nats_connection.to_owned();
         let ack_inbox = self.inner.ack_inbox.to_owned();
-        nats_msg_to_stan_msg(nats_connection, ack_inbox, msg)
+        Message::from_nats_message(msg, nats_connection, ack_inbox)
     }
 
     /// Close this subscription.
@@ -653,6 +630,30 @@ impl fmt::Debug for Message {
 }
 
 impl Message {
+    fn from_nats_message(
+        msg: nats::Message,
+        nats_connection: nats::Connection,
+        ack_inbox: String,
+    ) -> io::Result<Self> {
+        let m = proto::MsgProto::decode(Bytes::from(msg.data))?;
+        let sequence = m.sequence.to_owned();
+        let timestamp =
+            time::SystemTime::UNIX_EPOCH + time::Duration::from_nanos(m.timestamp.try_into().unwrap());
+        let acked = Arc::new(Mutex::new(false));
+
+        Ok(Self {
+            sequence: sequence.to_owned(),
+            subject: m.subject.to_owned(),
+            data: m.data,
+            timestamp,
+            redelivered: m.redelivered,
+            redelivery_count: m.redelivery_count,
+            nats_connection,
+            ack_inbox,
+            acked,
+        })
+    }
+
     /// Ack message
     pub fn ack(&self) -> io::Result<()> {
         let mut acked = self.acked.lock().unwrap();
