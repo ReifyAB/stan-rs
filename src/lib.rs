@@ -114,14 +114,6 @@ fn process_heartbeat(msg: nats::Message) -> io::Result<()> {
     Ok(())
 }
 
-fn process_ack(msg: nats::Message) -> io::Result<()> {
-    let ack = proto::PubAck::decode(Bytes::from(msg.data))?;
-    if ack.error != "" {
-        return Err(io::Error::new(io::ErrorKind::Other, ack.error));
-    }
-    Ok(())
-}
-
 #[derive(Clone)]
 /// NATS Streaming subscription
 ///
@@ -752,7 +744,11 @@ impl Client {
         self.nats_connection
             .publish_request(&stan_subject, &ack_inbox, &buf)?;
         let resp = ack_sub.next_timeout(time::Duration::from_secs(1))?;
-        process_ack(resp)
+        let ack = proto::PubAck::decode(Bytes::from(resp.data))?;
+        if ack.error != "" {
+            return Err(io::Error::new(io::ErrorKind::Other, ack.error));
+        }
+        Ok(())
     }
 
     /// Start a subscription.
