@@ -550,7 +550,7 @@ pub enum SubscriptionStart {
 
 impl Default for SubscriptionStart {
     fn default() -> Self {
-        Self::NewOnly
+        Self::LastReceived
     }
 }
 
@@ -573,7 +573,7 @@ impl<'a> Default for SubscriptionConfig<'a> {
         Self {
             queue_group: None,
             durable_name: None,
-            start: SubscriptionStart::LastReceived,
+            start: SubscriptionStart::default(),
             max_in_flight: DEFAULT_MAX_INFLIGHT,
             ack_wait_in_secs: DEFAULT_ACK_WAIT,
         }
