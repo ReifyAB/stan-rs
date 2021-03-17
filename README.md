@@ -75,18 +75,17 @@ We were interested in at-least-once delivery with NATS, and the
 options here today are NATS Streaming, Lightbridge or Jetstream.
 
 Jetstream is the future of at-least-once delivery on NATS, but is
-still in tech preview, while NATS Streaming has been battle tested
+still in development, while NATS Streaming has been battle tested
 in production.
 
 At the same time, the NATS team is providing an awesome rust
 client that also has support for Jetstream, but they are not
 planning on supporting NATS Streaming (reasonable since Jetstream
-is around the corner).
+is their main focus).
 
 Since NATS Streaming is just a layer on top of NATS, this library
 was written to just wrap the nats.rs client to handle the NATS
-Streaming protocol, for those like us stuck with NATS Streaming
-until Jetstream is production ready.
+Streaming protocol, for those like us stuck with NATS Streaming.
 
 
 ## Installation
@@ -94,7 +93,7 @@ until Jetstream is production ready.
 ```toml
 [dependencies]
 nats = "0.9.7"
-stan = "0.0.12"
+stan = "0.0.13"
 ```
 
 ## Development
