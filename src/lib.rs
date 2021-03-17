@@ -602,7 +602,7 @@ impl<'a> SubscriptionConfig<'a> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 /// NATS Streaming message received on a given `Subscription`
 pub struct Message {
     pub sequence: u64,
@@ -614,20 +614,6 @@ pub struct Message {
     nats_connection: nats::Connection,
     ack_inbox: String,
     acked: Arc<Mutex<bool>>,
-}
-
-impl fmt::Debug for Message {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Message")
-            .field("sequence", &self.sequence)
-            .field("subject", &self.subject)
-            .field("data", &self.data)
-            .field("timestamp", &self.timestamp)
-            .field("redelivered", &self.redelivered)
-            .field("redeliverd_count", &self.redelivery_count)
-            .field("ack", &"Fn() -> io::Result<()>")
-            .finish()
-    }
 }
 
 impl Message {
