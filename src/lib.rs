@@ -510,6 +510,7 @@ impl<'a> Iterator for TimeoutIter<'a> {
 }
 
 #[derive(Debug)]
+/// List of possible starting positions for a new `Subscription`
 pub enum SubscriptionStart {
     /// Only receive new messages, starting from now (Default)
     NewOnly,
@@ -602,7 +603,7 @@ impl<'a> SubscriptionConfig<'a> {
 }
 
 #[derive(Clone)]
-/// NATS Streaming message received on subscriptions
+/// NATS Streaming message received on a given `Subscription`
 pub struct Message {
     pub sequence: u64,
     pub subject: String,
@@ -902,7 +903,7 @@ impl Drop for Client {
     }
 }
 
-/// Establishes a new NATS Streaming connection, returning a Client
+/// Establishes a new NATS Streaming connection, returning a `Client`
 ///
 /// # Example:
 ///```
