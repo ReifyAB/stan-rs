@@ -637,8 +637,8 @@ impl Message {
     ) -> io::Result<Self> {
         let m = proto::MsgProto::decode(Bytes::from(msg.data))?;
         let sequence = m.sequence.to_owned();
-        let timestamp =
-            time::SystemTime::UNIX_EPOCH + time::Duration::from_nanos(m.timestamp.try_into().unwrap());
+        let timestamp = time::SystemTime::UNIX_EPOCH
+            + time::Duration::from_nanos(m.timestamp.try_into().unwrap());
         let acked = Arc::new(Mutex::new(false));
 
         Ok(Self {
@@ -690,19 +690,89 @@ pub struct Client {
 }
 
 impl Client {
+    /// Start a new client, establishing a new NATS Streaming connection,
+    /// Same as stan::connect().
+    ///
+    /// # Example:
+    ///```
+    ///# use nats;
+    ///# use std::io;
+    ///# fn main() -> io::Result<()> {
+    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///    let sc = stan::Client::start(nc, "test-cluster", "rust-client-1")?;
+    ///#    Ok(())
+    ///# }
+    ///```
+    pub fn start(
+        nats_connection: nats::Connection,
+        cluster_id: &str,
+        client_id: &str,
+    ) -> io::Result<Client> {
+        let discover_subject = DEFAULT_DISCOVER_SUBJECT.to_owned() + "." + cluster_id;
+        let heartbeat_subject = utils::uuid();
+
+        // Start heartbeat handler
+        nats_connection
+            .subscribe(&heartbeat_subject)?
+            .with_handler(|msg| {
+                if let Some(reply) = msg.reply {
+                    msg.client.publish(&reply, None, None, &[])?;
+                }
+                Ok(())
+            });
+
+        let mut client = Client {
+            nats_connection,
+            cluster_id: cluster_id.to_owned(),
+            client_id: client_id.to_owned(),
+            conn_id: utils::uuid().as_bytes().to_owned(),
+            discover_subject,
+            heartbeat_subject,
+
+            pub_prefix: "".to_string(),
+            sub_req_subject: "".to_string(),
+            unsub_req_subject: "".to_string(),
+            close_req_subject: "".to_string(),
+            sub_close_req_subject: "".to_string(),
+        };
+
+        let conn_req = proto::ConnectRequest {
+            client_id: client_id.to_string(),
+            heartbeat_inbox: client.heartbeat_subject.to_owned(),
+            protocol: PROTOCOL,
+            conn_id: client.conn_id.to_owned(),
+            ping_interval: DEFAULT_PING_INTERVAL,
+            ping_max_out: DEFAULT_PING_MAX_OUT,
+        };
+
+        let conn_resp: proto::ConnectResponse =
+            client.nats_request(&client.discover_subject, conn_req)?;
+        if conn_resp.error != "" {
+            return Err(io::Error::new(io::ErrorKind::Other, conn_resp.error));
+        }
+
+        client.pub_prefix = conn_resp.pub_prefix;
+        client.sub_req_subject = conn_resp.sub_requests;
+        client.unsub_req_subject = conn_resp.unsub_requests;
+        client.close_req_subject = conn_resp.close_requests;
+        client.sub_close_req_subject = conn_resp.sub_close_requests;
+
+        Ok(client)
+    }
+
     /// Publish to a given subject. Will return an error if failed to
     /// receive a ack back from the streaming server.
     ///
     /// # Example:
     ///```
-    /// use nats;
-    /// use std::io;
-    /// fn main() -> io::Result<()> {
-    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
-    ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
-    ///
+    ///# use nats;
+    ///# use std::io;
+    ///# fn main() -> io::Result<()> {
+    ///#    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///#    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+    ///#
     ///    sc.publish("foo", "hello from rust 1")
-    /// }
+    ///# }
     ///```
     pub fn publish(&self, subject: &str, msg: impl AsRef<[u8]>) -> io::Result<()> {
         let stan_subject = self.pub_prefix.to_owned() + "." + subject;
@@ -832,59 +902,22 @@ impl Drop for Client {
     }
 }
 
+/// Establishes a new NATS Streaming connection, returning a Client
+///
+/// # Example:
+///```
+///# use nats;
+///# use std::io;
+///# fn main() -> io::Result<()> {
+///     let nc = nats::connect("nats://127.0.0.1:4222")?;
+///     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+///#    Ok(())
+///# }
+///```
 pub fn connect(
     nats_connection: nats::Connection,
     cluster_id: &str,
     client_id: &str,
 ) -> io::Result<Client> {
-    let discover_subject = DEFAULT_DISCOVER_SUBJECT.to_owned() + "." + cluster_id;
-    let heartbeat_subject = utils::uuid();
-
-    // Start heartbeat handler
-    nats_connection
-        .subscribe(&heartbeat_subject)?
-        .with_handler(|msg| {
-            if let Some(reply) = msg.reply {
-                msg.client.publish(&reply, None, None, &[])?;
-            }
-            Ok(())
-        });
-
-    let mut client = Client {
-        nats_connection,
-        cluster_id: cluster_id.to_owned(),
-        client_id: client_id.to_owned(),
-        conn_id: utils::uuid().as_bytes().to_owned(),
-        discover_subject,
-        heartbeat_subject,
-
-        pub_prefix: "".to_string(),
-        sub_req_subject: "".to_string(),
-        unsub_req_subject: "".to_string(),
-        close_req_subject: "".to_string(),
-        sub_close_req_subject: "".to_string(),
-    };
-
-    let conn_req = proto::ConnectRequest {
-        client_id: client_id.to_string(),
-        heartbeat_inbox: client.heartbeat_subject.to_owned(),
-        protocol: PROTOCOL,
-        conn_id: client.conn_id.to_owned(),
-        ping_interval: DEFAULT_PING_INTERVAL,
-        ping_max_out: DEFAULT_PING_MAX_OUT,
-    };
-
-    let conn_resp: proto::ConnectResponse =
-        client.nats_request(&client.discover_subject, conn_req)?;
-    if conn_resp.error != "" {
-        return Err(io::Error::new(io::ErrorKind::Other, conn_resp.error));
-    }
-
-    client.pub_prefix = conn_resp.pub_prefix;
-    client.sub_req_subject = conn_resp.sub_requests;
-    client.unsub_req_subject = conn_resp.unsub_requests;
-    client.close_req_subject = conn_resp.close_requests;
-    client.sub_close_req_subject = conn_resp.sub_close_requests;
-
-    Ok(client)
+    Client::start(nats_connection, cluster_id, client_id)
 }
