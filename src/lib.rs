@@ -613,11 +613,11 @@ impl<'a> SubscriptionConfig<'a> {
                     ));
                 }
                 match now.duration_since(t) {
-                    Ok(d) => utils::u128_to_i64(d.as_nanos()),
+                    Ok(d) => Ok(-utils::u128_to_i64(d.as_nanos())?),
                     Err(err) => Err(io::Error::new(io::ErrorKind::InvalidInput, err)),
                 }
             }
-            SubscriptionStart::FromPast(d) => utils::u128_to_i64(d.as_nanos()),
+            SubscriptionStart::FromPast(d) => Ok(-utils::u128_to_i64(d.as_nanos())?),
             _ => Ok(0),
         }
     }
