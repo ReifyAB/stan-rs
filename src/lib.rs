@@ -230,19 +230,10 @@ fn nats_msg_to_stan_msg(
     msg: nats::Message,
 ) -> io::Result<Message> {
     let m = proto::MsgProto::decode(Bytes::from(msg.data))?;
-    let subject = m.subject.to_owned();
     let sequence = m.sequence.to_owned();
-    let acked: Mutex<bool> = Mutex::new(false);
     let timestamp =
         time::SystemTime::UNIX_EPOCH + time::Duration::from_nanos(m.timestamp.try_into().unwrap());
-    let ack: AckFn = Arc::new(move || {
-        let mut a = acked.lock().unwrap();
-        if !*a {
-            ack_msg(&nats_connection, &ack_inbox, &subject, &sequence)?;
-            *a = true;
-        }
-        Ok(())
-    });
+    let acked = Arc::new(Mutex::new(false));
 
     Ok(Message {
         sequence: sequence.to_owned(),
@@ -251,7 +242,9 @@ fn nats_msg_to_stan_msg(
         timestamp,
         redelivered: m.redelivered,
         redelivery_count: m.redelivery_count,
-        ack,
+        nats_connection,
+        ack_inbox,
+        acked,
     })
 }
 
@@ -666,9 +659,6 @@ impl<'a> SubscriptionConfig<'a> {
     }
 }
 
-/// Ack function
-pub type AckFn = Arc<dyn Fn() -> io::Result<()>>;
-
 #[derive(Clone)]
 /// NATS Streaming message received on subscriptions
 pub struct Message {
@@ -678,7 +668,9 @@ pub struct Message {
     pub timestamp: time::SystemTime,
     pub redelivered: bool,
     pub redelivery_count: u32,
-    ack: AckFn,
+    nats_connection: nats::Connection,
+    ack_inbox: String,
+    acked: Arc<Mutex<bool>>,
 }
 
 impl fmt::Debug for Message {
@@ -698,7 +690,12 @@ impl fmt::Debug for Message {
 impl Message {
     /// Ack message
     pub fn ack(&self) -> io::Result<()> {
-        (self.ack)()
+        let mut a = self.acked.lock().unwrap();
+        if !*a {
+            ack_msg(&self.nats_connection, &self.ack_inbox, &self.subject, &self.sequence)?;
+            *a = true;
+        }
+        Ok(())
     }
 }
 
