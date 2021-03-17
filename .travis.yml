@@ -2,6 +2,7 @@ sudo: required
 services:
   - docker
 language: rust
+cache: cargo
 rust: 1.50.0
 before_script:
   - docker run -d -p 4222:4222 -p 8222:8222 nats-streaming
