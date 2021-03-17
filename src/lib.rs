@@ -771,13 +771,14 @@ impl Client {
             sha256: [].to_vec(), // unused in stan.go
         };
 
-        let mut buf: Vec<u8> = Vec::new();
-        msg.encode(&mut buf)?;
-
         let ack_inbox = DEFAULT_ACKS_SUBJECT.to_owned() + "." + &utils::uuid();
         let ack_sub = self.nats_connection.subscribe(&ack_inbox)?;
+
+        let mut buf: Vec<u8> = Vec::new();
+        msg.encode(&mut buf)?;
         self.nats_connection
             .publish_request(&stan_subject, &ack_inbox, &buf)?;
+
         let resp = ack_sub.next_timeout(time::Duration::from_secs(1))?;
         let ack = proto::PubAck::decode(Bytes::from(resp.data))?;
         if ack.error != "" {
