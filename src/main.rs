@@ -31,20 +31,31 @@ fn main() -> io::Result<()> {
             Ok(())
         });
 
-    for msg in sc.subscribe("foo", Default::default())?.messages() {
-        println!("sub 3 got {:?}", from_utf8(&msg.data));
-        msg.ack()?;
-        break; // just break for the example to run
-    }
 
-    for msg in sc
-        .subscribe("foo", Default::default())?
-        .timeout_iter(time::Duration::from_secs(1))
-    {
-        println!("sub 4 got {:?}", from_utf8(&msg.data));
-        msg.ack()?;
-        break; // just break for the example to run
-    }
+    let sc2 = sc.clone();
+    thread::Builder::new()
+        .name("stan_loop_1".to_string())
+        .spawn(move || {
+            for msg in sc2.subscribe("foo", Default::default()).unwrap().messages() {
+                println!("sub 3 got {:?}", from_utf8(&msg.data));
+                msg.ack().unwrap();
+                break; // just break for the example to run
+            }
+        })?;
+
+    let sc3 = sc.clone();
+    thread::Builder::new()
+        .name("stan_loop_1".to_string())
+        .spawn(move || {
+            for msg in sc3
+                .subscribe("foo", Default::default()).unwrap()
+                .timeout_iter(time::Duration::from_secs(1))
+            {
+                println!("sub 4 got {:?}", from_utf8(&msg.data));
+                msg.ack().unwrap();
+                break; // just break for the example to run
+            }
+        })?;
 
     sc.publish("foo", "hello from rust 2")?;
     sc.publish("foo", "hello from rust 3")?;

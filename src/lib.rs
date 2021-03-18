@@ -658,19 +658,46 @@ impl Message {
 #[derive(Clone)]
 /// NATS Streaming client
 pub struct Client {
-    nats_connection: nats::Connection,
     cluster_id: String,
-    client_id: String,
     conn_id: Vec<u8>,
+    discover_subject: String,
+    heartbeat_subject: String,
+    inner: Arc<InnerClient>,
+}
 
+struct InnerClient {
+    nats_connection: nats::Connection,
+    client_id: String,
     pub_prefix: String,
     sub_req_subject: String,
     unsub_req_subject: String,
     close_req_subject: String,
     sub_close_req_subject: String,
+}
 
-    discover_subject: String,
-    heartbeat_subject: String,
+fn nats_request<Req: prost::Message, Res: prost::Message + Default>(
+    nats_connection: nats::Connection,
+    subject: &str,
+    req: Req,
+) -> io::Result<Res> {
+    let mut buf = Vec::new();
+    req.encode(&mut buf)?;
+    let resp = nats_connection.request(&subject, buf)?;
+    Ok(Res::decode(Bytes::from(resp.data))?)
+}
+
+impl Drop for InnerClient {
+    fn drop(&mut self) {
+        // TODO: better cleanup?
+        // TODO: figure out what to do if we fail here?
+        let _res: io::Result<proto::CloseResponse> = nats_request(
+            self.nats_connection.clone(),
+            &self.close_req_subject,
+            proto::CloseRequest {
+                client_id: self.client_id.to_owned(),
+            },
+        );
+    }
 }
 
 impl Client {
@@ -694,6 +721,7 @@ impl Client {
     ) -> io::Result<Client> {
         let discover_subject = DEFAULT_DISCOVER_SUBJECT.to_owned() + "." + cluster_id;
         let heartbeat_subject = utils::uuid();
+        let conn_id = utils::uuid().as_bytes().to_owned();
 
         // Start heartbeat handler
         nats_connection
@@ -705,43 +733,37 @@ impl Client {
                 Ok(())
             });
 
-        let mut client = Client {
-            nats_connection,
-            cluster_id: cluster_id.to_owned(),
-            client_id: client_id.to_owned(),
-            conn_id: utils::uuid().as_bytes().to_owned(),
-            discover_subject,
-            heartbeat_subject,
-
-            pub_prefix: "".to_string(),
-            sub_req_subject: "".to_string(),
-            unsub_req_subject: "".to_string(),
-            close_req_subject: "".to_string(),
-            sub_close_req_subject: "".to_string(),
-        };
-
         let conn_req = proto::ConnectRequest {
             client_id: client_id.to_string(),
-            heartbeat_inbox: client.heartbeat_subject.to_owned(),
+            heartbeat_inbox: heartbeat_subject.to_owned(),
             protocol: PROTOCOL,
-            conn_id: client.conn_id.to_owned(),
+            conn_id: conn_id.to_owned(),
             ping_interval: DEFAULT_PING_INTERVAL,
             ping_max_out: DEFAULT_PING_MAX_OUT,
         };
 
         let conn_resp: proto::ConnectResponse =
-            client.nats_request(&client.discover_subject, conn_req)?;
+            nats_request(nats_connection.clone(), &discover_subject, conn_req)?;
         if conn_resp.error != "" {
             return Err(io::Error::new(io::ErrorKind::Other, conn_resp.error));
         }
 
-        client.pub_prefix = conn_resp.pub_prefix;
-        client.sub_req_subject = conn_resp.sub_requests;
-        client.unsub_req_subject = conn_resp.unsub_requests;
-        client.close_req_subject = conn_resp.close_requests;
-        client.sub_close_req_subject = conn_resp.sub_close_requests;
+        Ok(Client {
+            cluster_id: cluster_id.to_owned(),
+            conn_id: conn_id.to_owned(),
+            discover_subject,
+            heartbeat_subject,
 
-        Ok(client)
+            inner: Arc::new(InnerClient {
+                nats_connection,
+                client_id: client_id.to_owned(),
+                pub_prefix: conn_resp.pub_prefix,
+                sub_req_subject: conn_resp.sub_requests,
+                unsub_req_subject: conn_resp.unsub_requests,
+                close_req_subject: conn_resp.close_requests,
+                sub_close_req_subject: conn_resp.sub_close_requests,
+            }),
+        })
     }
 
     /// Publish to a given subject. Will return an error if failed to
@@ -759,10 +781,10 @@ impl Client {
     ///# }
     ///```
     pub fn publish(&self, subject: &str, msg: impl AsRef<[u8]>) -> io::Result<()> {
-        let stan_subject = self.pub_prefix.to_owned() + "." + subject;
+        let stan_subject = self.inner.pub_prefix.to_owned() + "." + subject;
 
         let msg = proto::PubMsg {
-            client_id: self.client_id.to_owned(),
+            client_id: self.inner.client_id.to_owned(),
             guid: utils::uuid(),
             subject: subject.to_owned(),
             reply: "".to_string(), // unused in stan.go
@@ -772,11 +794,11 @@ impl Client {
         };
 
         let ack_inbox = DEFAULT_ACKS_SUBJECT.to_owned() + "." + &utils::uuid();
-        let ack_sub = self.nats_connection.subscribe(&ack_inbox)?;
+        let ack_sub = self.inner.nats_connection.subscribe(&ack_inbox)?;
 
         let mut buf: Vec<u8> = Vec::new();
         msg.encode(&mut buf)?;
-        self.nats_connection
+        self.inner.nats_connection
             .publish_request(&stan_subject, &ack_inbox, &buf)?;
 
         let resp = ack_sub.next_timeout(time::Duration::from_secs(1))?;
@@ -811,12 +833,12 @@ impl Client {
     /// }
     ///```
     pub fn subscribe(&self, subject: &str, config: SubscriptionConfig) -> io::Result<Subscription> {
-        let inbox = self.nats_connection.new_inbox();
-        let sub = self.nats_connection.subscribe(&inbox)?;
+        let inbox = self.inner.nats_connection.new_inbox();
+        let sub = self.inner.nats_connection.subscribe(&inbox)?;
         let durable_name = config.durable_name.unwrap_or("").to_string();
 
         let req = proto::SubscriptionRequest {
-            client_id: self.client_id.to_owned(),
+            client_id: self.inner.client_id.to_owned(),
             subject: subject.to_string(),
             q_group: config.queue_group.unwrap_or("").to_string(),
             inbox: inbox.to_owned(),
@@ -827,7 +849,11 @@ impl Client {
             start_sequence: config.start_sequence(),
             start_time_delta: config.start_time_delta()?,
         };
-        let res: proto::SubscriptionResponse = self.nats_request(&self.sub_req_subject, req)?;
+        let res: proto::SubscriptionResponse = nats_request(
+            self.inner.nats_connection.clone(),
+            &self.inner.sub_req_subject,
+            req,
+        )?;
         if res.error != "" {
             return Err(io::Error::new(io::ErrorKind::Other, res.error));
         }
@@ -836,24 +862,13 @@ impl Client {
             nats_subscription: sub,
             inner: Arc::new(InnerSub {
                 ack_inbox: res.ack_inbox,
-                nats_connection: self.nats_connection.to_owned(),
-                client_id: self.client_id.to_owned(),
+                nats_connection: self.inner.nats_connection.to_owned(),
+                client_id: self.inner.client_id.to_owned(),
                 subject: subject.to_owned(),
-                unsub_req_subject: self.unsub_req_subject.to_owned(),
+                unsub_req_subject: self.inner.unsub_req_subject.to_owned(),
                 durable_name: durable_name.to_owned(),
             }),
         })
-    }
-
-    fn nats_request<Req: prost::Message, Res: prost::Message + Default>(
-        &self,
-        subject: &str,
-        req: Req,
-    ) -> io::Result<Res> {
-        let mut buf = Vec::new();
-        req.encode(&mut buf)?;
-        let resp = self.nats_connection.request(&subject, buf)?;
-        Ok(Res::decode(Bytes::from(resp.data))?)
     }
 }
 
@@ -861,29 +876,16 @@ impl fmt::Debug for Client {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Client")
             .field("cluster_id", &self.cluster_id)
-            .field("client_id", &self.client_id)
+            .field("client_id", &self.inner.client_id)
             .field("conn_id", &self.conn_id)
-            .field("pub_prefix", &self.pub_prefix)
-            .field("sub_req_subject", &self.sub_req_subject)
-            .field("unsub_req_subject", &self.unsub_req_subject)
-            .field("close_req_subject", &self.close_req_subject)
-            .field("sub_close_req_subject", &self.sub_close_req_subject)
+            .field("pub_prefix", &self.inner.pub_prefix)
+            .field("sub_req_subject", &self.inner.sub_req_subject)
+            .field("unsub_req_subject", &self.inner.unsub_req_subject)
+            .field("close_req_subject", &self.inner.close_req_subject)
+            .field("sub_close_req_subject", &self.inner.sub_close_req_subject)
             .field("discover_subject", &self.discover_subject)
             .field("heartbeat_subject", &self.heartbeat_subject)
             .finish()
-    }
-}
-
-impl Drop for Client {
-    fn drop(&mut self) {
-        // TODO: better cleanup?
-        // TODO: figure out what to do if we fail here?
-        let _res: io::Result<proto::CloseResponse> = self.nats_request(
-            &self.close_req_subject,
-            proto::CloseRequest {
-                client_id: self.client_id.to_owned(),
-            },
-        );
     }
 }
 
