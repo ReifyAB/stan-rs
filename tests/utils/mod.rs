@@ -35,10 +35,14 @@ fn wait_for_server(port: u16) -> io::Result<()> {
                 return Err(err)
             }
             Err(_) => {
+                println!("waiting for server to start...");
                 thread::sleep(time::Duration::from_millis(200));
                 connect_attempts += 1;
             }
             Ok(_) => {
+                println!("server ready!");
+                // extra sleep for travis?
+                thread::sleep(time::Duration::from_millis(200));
                 return Ok(())
             }
         };
