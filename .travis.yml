@@ -5,4 +5,4 @@ language: rust
 cache: cargo
 rust: 1.50.0
 env:
-  - RUST_TEST_THREADS=1
+  - RUST_TEST_THREADS=4

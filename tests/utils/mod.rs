@@ -1,7 +1,7 @@
-use core::time;
-use std::{process::{Child, Command}, thread};
-use std::{io, net::TcpStream};
+use std::{io::BufReader, process::{Child, Command, Stdio}};
+use std::io;
 use uuid::Uuid;
+use std::io::prelude::*;
 
 pub(crate) struct Server {
     child: Child,
@@ -27,39 +27,20 @@ fn get_free_port() -> u16 {
     port.to_owned()
 }
 
-fn wait_for_server(port: u16) -> io::Result<()> {
-    let mut connect_attempts = 0;
-    loop {
-        match TcpStream::connect(format!("127.0.0.1:{}", port)) {
-            Err(err) if connect_attempts > 100 => {
-                return Err(err)
-            }
-            Err(_) => {
-                println!("waiting for server to start...");
-                thread::sleep(time::Duration::from_millis(200));
-                connect_attempts += 1;
-            }
-            Ok(_) => {
-                println!("server ready!");
-                // extra sleep for travis?
-                thread::sleep(time::Duration::from_millis(200));
-                return Ok(())
-            }
-        };
-    }
-}
-
 /// Starts a local NATS server that gets killed on drop.
 pub(crate) fn server() -> io::Result<Server> {
     let port = get_free_port();
     let process_name = format!("stan-rs-server-test-{}", Uuid::new_v4().to_string());
 
-    let child = Command::new("docker")
+    let mut child = Command::new("docker")
         .arg("run")
         .args(&["--name", &process_name])
         .args(&["-p", &format!("{}:4222", port)])
         .arg("nats-streaming")
+        .stderr(Stdio::piped())
         .spawn()?;
+
+    let stderr = child.stderr.take().unwrap();
 
     let server = Server {
         process_name,
@@ -67,7 +48,15 @@ pub(crate) fn server() -> io::Result<Server> {
         port,
     };
 
-    wait_for_server(port)?;
+    // wait for stan server
+    let mut reader = BufReader::new(stderr);
+    let mut line = String::new();
+    loop {
+        reader.read_line(&mut line)?;
+        if line.contains("Streaming Server is ready") {
+            break
+        }
+    }
 
     Ok(server)
 }
