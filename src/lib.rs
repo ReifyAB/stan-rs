@@ -9,9 +9,13 @@
 //! ```
 //! use nats;
 //! use std::{io, str::from_utf8, time};
+//!# mod test_utils;
 //!
 //! fn main() -> io::Result<()> {
-//!     let nc = nats::connect("nats://127.0.0.1:4222")?;
+//!     let nats_url = "nats://127.0.0.1:4222";
+//!#    let server = test_utils::server()?;
+//!#    let nats_url = &format!("localhost:{}", server.port);
+//!     let nc = nats::connect(nats_url)?;
 //!     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
 //!
 //!     sc.publish("foo", "hello from rust 1")?;
@@ -110,10 +114,14 @@ const DEFAULT_PING_MAX_OUT: i32 = 88;
 ///```
 /// use nats;
 /// use std::{io, str::from_utf8, time};
+///# mod test_utils;
 ///
-///  fn main() -> io::Result<()> {
-///      let nc = nats::connect("nats://127.0.0.1:4222")?;
-///      let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
+/// fn main() -> io::Result<()> {
+///     let nats_url = "nats://127.0.0.1:4222";
+///#    let server = test_utils::server()?;
+///#    let nats_url = &format!("localhost:{}", server.port);
+///     let nc = nats::connect(nats_url)?;
+///     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
 ///#
 ///#     sc.publish("foo", "hello from rust 1")?;
 ///#
@@ -195,9 +203,13 @@ impl Subscription {
     ///```
     ///# use nats;
     ///# use std::{io, str::from_utf8};
+    ///# mod test_utils;
     ///#
-    ///# fn main() -> io::Result<()> {
-    ///#     let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///#  fn main() -> io::Result<()> {
+    ///#     let nats_url = "nats://127.0.0.1:4222";
+    ///#     let server = test_utils::server()?;
+    ///#     let nats_url = &format!("localhost:{}", server.port);
+    ///#     let nc = nats::connect(nats_url)?;
     ///#     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
     ///#
     ///#     sc.publish("foo", "hello from rust 1")?;
@@ -219,9 +231,13 @@ impl Subscription {
     ///```
     ///# use nats;
     ///# use std::{io, str::from_utf8};
+    ///# mod test_utils;
     ///#
-    ///# fn main() -> io::Result<()> {
-    ///#     let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///#  fn main() -> io::Result<()> {
+    ///#     let nats_url = "nats://127.0.0.1:4222";
+    ///#     let server = test_utils::server()?;
+    ///#     let nats_url = &format!("localhost:{}", server.port);
+    ///#     let nc = nats::connect(nats_url)?;
     ///#     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
     ///#
     ///#     sc.publish("foo", "hello from rust 1")?;
@@ -243,9 +259,13 @@ impl Subscription {
     ///```
     ///# use nats;
     ///# use std::{io, str::from_utf8};
+    ///# mod test_utils;
     ///#
-    ///# fn main() -> io::Result<()> {
-    ///#     let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///#  fn main() -> io::Result<()> {
+    ///#     let nats_url = "nats://127.0.0.1:4222";
+    ///#     let server = test_utils::server()?;
+    ///#     let nats_url = &format!("localhost:{}", server.port);
+    ///#     let nc = nats::connect(nats_url)?;
     ///#     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
     ///#
     ///#     sc.publish("foo", "hello from rust 1")?;
@@ -268,9 +288,13 @@ impl Subscription {
     ///```
     ///# use nats;
     ///# use std::{io, str::from_utf8, time};
+    ///# mod test_utils;
     ///#
-    ///# fn main() -> io::Result<()> {
-    ///#     let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///#  fn main() -> io::Result<()> {
+    ///#     let nats_url = "nats://127.0.0.1:4222";
+    ///#     let server = test_utils::server()?;
+    ///#     let nats_url = &format!("localhost:{}", server.port);
+    ///#     let nc = nats::connect(nats_url)?;
     ///#     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
     ///#
     ///#     sc.publish("foo", "hello from rust 1")?;
@@ -303,8 +327,13 @@ impl Subscription {
     ///```
     ///# use nats;
     ///# use std::{io, str::from_utf8};
+    ///# mod test_utils;
+    ///#
     ///# fn main() -> io::Result<()> {
-    ///#    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///#    let nats_url = "nats://127.0.0.1:4222";
+    ///#    let server = test_utils::server()?;
+    ///#    let nats_url = &format!("localhost:{}", server.port);
+    ///#    let nc = nats::connect(nats_url)?;
     ///#    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
     ///#
     ///     sc.subscribe("foo", Default::default())?
@@ -321,8 +350,13 @@ impl Subscription {
     ///```
     ///# use nats;
     ///# use std::{io, str::from_utf8};
+    ///# mod test_utils;
+    ///#
     ///# fn main() -> io::Result<()> {
-    ///#    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///#    let nats_url = "nats://127.0.0.1:4222";
+    ///#    let server = test_utils::server()?;
+    ///#    let nats_url = &format!("localhost:{}", server.port);
+    ///#    let nc = nats::connect(nats_url)?;
     ///#    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
     ///#
     ///     sc.subscribe("foo", Default::default())?
@@ -355,8 +389,13 @@ impl Subscription {
     ///```
     /// use nats;
     /// use std::{io, str::from_utf8};
+    ///# mod test_utils;
+    ///#
     /// fn main() -> io::Result<()> {
-    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///    let nats_url = "nats://127.0.0.1:4222";
+    ///#   let server = test_utils::server()?;
+    ///#   let nats_url = &format!("localhost:{}", server.port);
+    ///    let nc = nats::connect(nats_url)?;
     ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
     ///    sc.publish("foo", "hello from rust 1")?;
     ///
@@ -381,8 +420,13 @@ impl Subscription {
     ///```
     /// use nats;
     /// use std::{io, str::from_utf8};
+    ///# mod test_utils;
+    ///#
     /// fn main() -> io::Result<()> {
-    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///    let nats_url = "nats://127.0.0.1:4222";
+    ///#   let server = test_utils::server()?;
+    ///#   let nats_url = &format!("localhost:{}", server.port);
+    ///    let nc = nats::connect(nats_url)?;
     ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
     ///    sc.publish("foo", "hello from rust 1")?;
     ///
@@ -407,8 +451,13 @@ impl Subscription {
     ///```
     /// use nats;
     /// use std::{io, str::from_utf8};
+    ///# mod test_utils;
+    ///#
     /// fn main() -> io::Result<()> {
-    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///    let nats_url = "nats://127.0.0.1:4222";
+    ///#   let server = test_utils::server()?;
+    ///#   let nats_url = &format!("localhost:{}", server.port);
+    ///    let nc = nats::connect(nats_url)?;
     ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
     ///    sc.publish("foo", "hello from rust 1")?;
     ///
@@ -440,8 +489,13 @@ impl Subscription {
     ///```
     /// use nats;
     /// use std::{io, str::from_utf8};
+    ///# mod test_utils;
+    ///#
     /// fn main() -> io::Result<()> {
-    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///    let nats_url = "nats://127.0.0.1:4222";
+    ///#   let server = test_utils::server()?;
+    ///#   let nats_url = &format!("localhost:{}", server.port);
+    ///    let nc = nats::connect(nats_url)?;
     ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
     ///
     ///    let sub = sc.subscribe("foo", Default::default())?;
@@ -682,7 +736,7 @@ fn nats_request<Req: prost::Message, Res: prost::Message + Default>(
 ) -> io::Result<Res> {
     let mut buf = Vec::new();
     req.encode(&mut buf)?;
-    let resp = nats_connection.request(&subject, buf)?;
+    let resp = nats_connection.request_timeout(&subject, buf, time::Duration::from_secs(2))?;
     Ok(Res::decode(Bytes::from(resp.data))?)
 }
 
@@ -708,8 +762,13 @@ impl Client {
     ///```
     ///# use nats;
     ///# use std::io;
+    ///# mod test_utils;
+    ///#
     ///# fn main() -> io::Result<()> {
-    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///    let nats_url = "nats://127.0.0.1:4222";
+    ///#   let server = test_utils::server()?;
+    ///#   let nats_url = &format!("localhost:{}", server.port);
+    ///    let nc = nats::connect(nats_url)?;
     ///    let sc = stan::Client::start(nc, "test-cluster", "rust-client-1")?;
     ///#    Ok(())
     ///# }
@@ -773,8 +832,13 @@ impl Client {
     ///```
     ///# use nats;
     ///# use std::io;
-    ///# fn main() -> io::Result<()> {
-    ///#    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///# mod test_utils;
+    ///#
+    /// fn main() -> io::Result<()> {
+    ///    let nats_url = "nats://127.0.0.1:4222";
+    ///#   let server = test_utils::server()?;
+    ///#   let nats_url = &format!("localhost:{}", server.port);
+    ///    let nc = nats::connect(nats_url)?;
     ///#    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
     ///#
     ///    sc.publish("foo", "hello from rust 1")
@@ -798,7 +862,8 @@ impl Client {
 
         let mut buf: Vec<u8> = Vec::new();
         msg.encode(&mut buf)?;
-        self.inner.nats_connection
+        self.inner
+            .nats_connection
             .publish_request(&stan_subject, &ack_inbox, &buf)?;
 
         let resp = ack_sub.next_timeout(time::Duration::from_secs(1))?;
@@ -815,8 +880,13 @@ impl Client {
     ///```
     /// use nats;
     /// use std::{io, str::from_utf8};
+    ///# mod test_utils;
+    ///#
     /// fn main() -> io::Result<()> {
-    ///    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    ///    let nats_url = "nats://127.0.0.1:4222";
+    ///#   let server = test_utils::server()?;
+    ///#   let nats_url = &format!("localhost:{}", server.port);
+    ///    let nc = nats::connect(nats_url)?;
     ///    let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
     ///
     ///    sc.publish("foo", "hello from rust 1")?;
@@ -895,8 +965,13 @@ impl fmt::Debug for Client {
 ///```
 ///# use nats;
 ///# use std::io;
+///# mod test_utils;
+///#
 ///# fn main() -> io::Result<()> {
-///     let nc = nats::connect("nats://127.0.0.1:4222")?;
+///    let nats_url = "nats://127.0.0.1:4222";
+///#   let server = test_utils::server()?;
+///#   let nats_url = &format!("localhost:{}", server.port);
+///    let nc = nats::connect(nats_url)?;
 ///     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
 ///#    Ok(())
 ///# }

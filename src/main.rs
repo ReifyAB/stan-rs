@@ -1,9 +1,13 @@
 use nats;
 use stan;
 use std::{io, str::from_utf8, thread, time};
+mod test_utils;
 
 fn main() -> io::Result<()> {
-    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    let server = test_utils::server()?;
+    let nats_url = &format!("localhost:{}", server.port);
+
+    let nc = nats::connect(nats_url)?;
     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
 
     sc.publish("foo", "hello from rust 1")?;
