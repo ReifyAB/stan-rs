@@ -11,7 +11,7 @@ fn test_without_queue_group() -> io::Result<()> {
     let mut logger = Logger::start();
 
     for _ in 0..4 {
-        // fork 4 subscriptions without group queue
+        // fork 4 subscriptions without queue group
         sc.subscribe(
             "foo",
             stan::SubscriptionConfig {
