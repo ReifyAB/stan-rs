@@ -3,7 +3,7 @@ mod utils;
 use logtest::Logger;
 
 #[test]
-fn client_drop() -> io::Result<()> {
+fn test_client_drop() -> io::Result<()> {
     let server = utils::server()?;
     let nats_url = &format!("localhost:{}", server.port);
     let nc = nats::connect(nats_url)?;
