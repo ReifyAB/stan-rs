@@ -4,11 +4,10 @@ use logtest::Logger;
 
 #[test]
 fn client_drop() -> io::Result<()> {
-    let mut logger = Logger::start();
     let server = utils::server()?;
     let nats_url = &format!("localhost:{}", server.port);
     let nc = nats::connect(nats_url)?;
-
+    let mut logger = Logger::start();
     {
         let sub = {
             stan::connect(nc.clone(), "test-cluster", "rust-client-1")?
