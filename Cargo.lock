@@ -909,7 +909,7 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "stan"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "bytes",
  "cargo-readme",

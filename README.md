@@ -91,7 +91,7 @@ Streaming protocol, for those like us stuck with NATS Streaming.
 ```toml
 [dependencies]
 nats = "0.9.7"
-stan = "0.0.15"
+stan = "0.0.16"
 ```
 
 ## Development
