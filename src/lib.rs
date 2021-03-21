@@ -572,10 +572,9 @@ impl<'a> Iterator for TimeoutIter<'a> {
 #[derive(Debug)]
 /// List of possible starting positions for a new `Subscription`
 pub enum SubscriptionStart {
-    /// Only receive new messages, starting from now (Default)
+    /// Only receive new messages, starting from now
     NewOnly,
-    /// Start receiving from the last received message. Use in
-    /// combination with a durable queue.
+    /// Start receiving from the last received message (default)
     LastReceived,
     /// Send all available messages on the subject
     AllAvailable,
