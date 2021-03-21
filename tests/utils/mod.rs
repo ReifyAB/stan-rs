@@ -17,7 +17,6 @@ impl Drop for Server {
             .output()
             .expect("failed to stop process");
         self.child.wait().unwrap();
-        println!("dropped!");
     }
 }
 
