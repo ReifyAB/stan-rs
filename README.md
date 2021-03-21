@@ -7,16 +7,14 @@
 
 NATS Streaming client wrapper built on top of [NATS.rs](https://github.com/nats-io/nats.rs)
 
-Warning: still early stage of development, although feature
-complete. Contributions and feedback more than welcome!
-
 ## Examples
 ```rust
 use nats;
 use std::{io, str::from_utf8, time};
 
 fn main() -> io::Result<()> {
-    let nc = nats::connect("nats://127.0.0.1:4222")?;
+    let nats_url = "nats://127.0.0.1:4222";
+    let nc = nats::connect(nats_url)?;
     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
 
     sc.publish("foo", "hello from rust 1")?;
@@ -98,8 +96,14 @@ stan = "0.0.15"
 
 ## Development
 
-To start a local nats streaming server for testing:
+To start a local nats streaming server:
 
-```
+```sh
 docker run -p 4222:4222 -p 8222:8222 nats-streaming
+```
+
+Running tests require docker. To run the tests:
+
+```sh
+cargo test
 ```

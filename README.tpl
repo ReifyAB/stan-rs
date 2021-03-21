@@ -17,8 +17,14 @@ stan = "{{version}}"
 
 ## Development
 
-To start a local nats streaming server for testing:
+To start a local nats streaming server:
 
-```
+```sh
 docker run -p 4222:4222 -p 8222:8222 nats-streaming
+```
+
+Running tests require docker. To run the tests:
+
+```sh
+cargo test
 ```
