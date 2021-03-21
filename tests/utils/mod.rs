@@ -62,7 +62,7 @@ pub(crate) fn server() -> io::Result<Server> {
 
 #[allow(dead_code)]
 pub(crate) fn next_message(sub: &stan::Subscription) -> io::Result<String> {
-    let msg = sub.next_timeout(time::Duration::from_secs(1))?;
+    let msg = sub.next_timeout(time::Duration::from_millis(50))?;
     let s = from_utf8(&msg.data).unwrap();
     msg.ack()?;
     Ok(s.to_string())
