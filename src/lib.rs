@@ -160,6 +160,11 @@ const DEFAULT_PING_MAX_OUT: i32 = 88;
 pub struct Subscription {
     nats_subscription: nats::Subscription,
     inner: Arc<InnerSub>,
+    // Keep a reference to Client to only drop it once the
+    // subscription is closed. Note that we need it last in the struct
+    // to be dropped after we drop the inner subscription
+    // (i.e. unsubscribe)
+    client: Client,
 }
 
 struct InnerSub {
@@ -192,7 +197,11 @@ impl Drop for InnerSub {
         // https://github.com/nats-io/stan.go#closing-the-group
         if self.durable_name == "" {
             // TODO: better error handling?
-            self.unsubscribe().unwrap_or_else(|e| println!("{:?}", e))
+            if let Err(err) = self.unsubscribe() {
+                log::error!("stan - error closing subscription: {:?}", err)
+            } else {
+                log::debug!("stan - subscription closed")
+            }
         }
     }
 }
@@ -742,15 +751,19 @@ fn nats_request<Req: prost::Message, Res: prost::Message + Default>(
 
 impl Drop for InnerClient {
     fn drop(&mut self) {
-        // TODO: better cleanup?
-        // TODO: figure out what to do if we fail here?
-        let _res: io::Result<proto::CloseResponse> = nats_request(
+        let res: io::Result<proto::CloseResponse> = nats_request(
             self.nats_connection.clone(),
             &self.close_req_subject,
             proto::CloseRequest {
                 client_id: self.client_id.to_owned(),
             },
         );
+
+        if let Err(err) = res {
+            log::error!("stan - error closing client: {}", err)
+        } else {
+            log::debug!("stan - client closed")
+        }
     }
 }
 
@@ -930,6 +943,7 @@ impl Client {
 
         Ok(Subscription {
             nats_subscription: sub,
+            client: self.clone(),
             inner: Arc::new(InnerSub {
                 ack_inbox: res.ack_inbox,
                 nats_connection: self.inner.nats_connection.to_owned(),
