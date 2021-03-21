@@ -24,9 +24,9 @@ fn test_subscription_start() -> io::Result<()> {
     let subject = "foo";
     let sc = stan::connect(nc, "test-cluster", "rust-client-1")?;
     sc.publish(subject, "hello from rust 1")?;
-    sc.publish(subject, "hello from rust 2")?;
-    thread::sleep(time::Duration::from_millis(50));
     let from_time_start = time::SystemTime::now();
+    thread::sleep(time::Duration::from_millis(50));
+    sc.publish(subject, "hello from rust 2")?;
     thread::sleep(time::Duration::from_millis(50));
     sc.publish(subject, "hello from rust 3")?;
     sc.publish(subject, "hello from rust 4")?;
@@ -38,7 +38,7 @@ fn test_subscription_start() -> io::Result<()> {
     );
 
     assert_eq!(
-        "hello from rust 3",
+        "hello from rust 2",
         next_message_starting_at(
             &sc,
             subject,
