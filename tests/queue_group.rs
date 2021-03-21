@@ -26,6 +26,11 @@ fn test_without_queue_group() -> io::Result<()> {
 
     sc.publish("foo", "hello from rust 1")?;
 
+    sc.subscribe("foo", stan::SubscriptionConfig{
+        start: stan::SubscriptionStart::LastReceived,
+        ..Default::default()
+    })?.next();
+
     assert_eq!(logger.pop().unwrap().args(), "received: hello from rust 1");
     assert_eq!(logger.pop().unwrap().args(), "received: hello from rust 1");
     assert_eq!(logger.pop().unwrap().args(), "received: hello from rust 1");
@@ -61,6 +66,11 @@ fn test_with_queue_group() -> io::Result<()> {
     sc.publish("foo", "hello from rust 2")?;
     sc.publish("foo", "hello from rust 3")?;
     sc.publish("foo", "hello from rust 4")?;
+
+    sc.subscribe("foo", stan::SubscriptionConfig{
+        start: stan::SubscriptionStart::LastReceived,
+        ..Default::default()
+    })?.next();
 
     assert_eq!(logger.pop().unwrap().args(), "received: hello from rust 1");
     assert_eq!(logger.pop().unwrap().args(), "received: hello from rust 2");
